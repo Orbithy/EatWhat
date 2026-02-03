@@ -18,6 +18,7 @@ CREATE TABLE contacts (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_contacts_account_id ON contacts (account_id);
 
 CREATE TABLE verifications (
   id             bigserial PRIMARY KEY,

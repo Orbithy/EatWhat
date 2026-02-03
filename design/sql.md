@@ -5,6 +5,13 @@
 ```postgresql
 CREATE EXTENSION IF NOT EXISTS citext;
 ```
+注意：Flyway 只负责在已存在的数据库中执行迁移脚本，不会自动创建数据库本身。
+请先手动创建数据库并赋权给应用账号，例如：
+```postgresql
+CREATE DATABASE eatwhat;
+CREATE USER eatwhat_user WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
+```
 
 ## users
 

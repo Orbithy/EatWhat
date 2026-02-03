@@ -69,3 +69,4 @@ app:
   mail:
     from: noreply@example.com      # 发件人邮箱地址，需要替换为实际的发件邮箱
     from-name: project name             # 发件人名称
+  oauth-url: https://i.sdu.edu.cn/cas/proxy/page?forward=https%3A%2F%2Fv50to.you%2api%2v1%2auth%2callback  # OAuth回调地址，根据实际情况修改

@@ -4,10 +4,14 @@ import cn.dev33.satoken.stp.SaTokenInfo;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import you.v50to.eatwhat.config.StpInterfaceImpl;
+import you.v50to.eatwhat.data.dto.ChangePwdDTO;
 import you.v50to.eatwhat.data.dto.LoginDTO;
 import you.v50to.eatwhat.data.dto.RegisterDTO;
 import you.v50to.eatwhat.data.enums.BizCode;
@@ -20,6 +24,7 @@ import you.v50to.eatwhat.mapper.UserMapper;
 import you.v50to.eatwhat.mapper.VerificationMapper;
 import you.v50to.eatwhat.utils.JwtUtil;
 
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -39,6 +44,8 @@ public class AuthService {
     private EmailService emailService;
     @Resource
     private StringRedisTemplate redis;
+    @Autowired
+    private SmsService smsService;
 
     private boolean usernameExists(String username) {
         return userMapper.exists(new LambdaQueryWrapper<User>()
@@ -121,6 +128,7 @@ public class AuthService {
         return Result.ok();
     }
 
+    @Transactional
     public Result<Void> callBack(String token) {
         String key = ""; // TODO: 添加key
         Long userId = StpUtil.getLoginIdAsLong();
@@ -140,8 +148,7 @@ public class AuthService {
             v.setStudentId(casID);
             verificationMapper.insert(v);
             String redisKey = "auth:" + userId;
-            redis.opsForValue().set(redisKey, "sso");
-            redis.expire(redisKey, StpInterfaceImpl.TTL);
+            redis.opsForValue().set(redisKey, "sso", StpInterfaceImpl.TTL);
             //response.sendRedirect(CasPageLogin.DEFAULT_FORWARD + "?casId=" + casID + "&name=" + name);
             return null;
         }
@@ -169,7 +176,8 @@ public class AuthService {
         }
     }
 
-    public Result<Void> verifyEmail(String token) {
+    @Transactional
+    public Result<Void> verifyEmail(String token, HttpServletResponse response) {
         try {
             EmailService.EmailVerification verification = emailService.verifyToken(token);
             Long userId = verification.userId();
@@ -211,9 +219,35 @@ public class AuthService {
                 redis.opsForValue().set("auth:" + userId, "school_email", StpInterfaceImpl.TTL);
             }
 
+            response.sendRedirect("/email-verified-success"); // TODO: 修改为实际的成功页面URL
             return Result.ok();
         } catch (you.v50to.eatwhat.exception.BizException e) {
             return Result.fail(e.getBizCode());
+        } catch (IOException e) {
+            return Result.fail(BizCode.UNKNOWN_ERROR, "重定向失败");
         }
+    }
+
+
+    public Result<Void> sendCode(String auth, String mobile, String ip) {
+        if (StpUtil.getRoleList() == null){
+            return Result.fail(BizCode.STATE_NOT_ALLOWED, "未通过认证，无法发送验证码");
+        }
+        smsService.sendCode(auth, mobile, ip);
+        return Result.ok();
+    }
+
+    public Result<Void> changePassword(ChangePwdDTO changePwdDTO) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return Result.fail(BizCode.USER_NOT_FOUND);
+        }
+        if (!passwordEncoder.matches(changePwdDTO.getOldPassword(), user.getPasswordHash())) {
+            return Result.fail(BizCode.PASSWORD_ERROR);
+        }
+        user.setPasswordHash(passwordEncoder.encode(changePwdDTO.getNewPassword()));
+        userMapper.updateById(user);
+        return Result.ok();
     }
 }

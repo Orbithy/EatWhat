@@ -32,9 +32,11 @@ public class StpInterfaceImpl implements StpInterface {
         Long userId = Long.valueOf(loginId.toString());
         String key = "auth:" + userId;
 
-        Set<String> cached = redis.opsForSet().members(key);
-        if (cached != null && !cached.isEmpty()) {
-            return new ArrayList<>(cached);
+        String method = redis.opsForValue().get(key);
+        if (method != null) {
+            return "NONE".equals(method)
+                    ? Collections.emptyList()
+                    : List.of("verify:" + method);
         }
 
         Verification v = verificationMapper.selectOne(
@@ -44,12 +46,11 @@ public class StpInterfaceImpl implements StpInterface {
         );
 
         if (v == null || v.getMethod() == null) {
-            redis.opsForValue().set(key, "", Duration.ofMinutes(2));
+            redis.opsForValue().set(key, "NONE", Duration.ofMinutes(2));
             return Collections.emptyList();
         }
 
-        redis.opsForValue().set(key, v.getMethod());
-        redis.expire(key, TTL);
+        redis.opsForValue().set(key, v.getMethod(), TTL);
         return List.of("verify:" + v.getMethod());
     }
 
@@ -61,9 +62,11 @@ public class StpInterfaceImpl implements StpInterface {
         Long userId = Long.valueOf(loginId.toString());
         String key = "auth:" + userId;
 
-        Set<String> cached = redis.opsForSet().members(key);
-        if (cached != null && !cached.isEmpty()) {
-            return List.of("verified");
+        String method = redis.opsForValue().get(key);
+        if (method != null) {
+            return "NONE".equals(method)
+                    ? Collections.emptyList()
+                    : List.of("verified");
         }
         Verification v = verificationMapper.selectOne(
                 new LambdaQueryWrapper<Verification>()
@@ -72,7 +75,7 @@ public class StpInterfaceImpl implements StpInterface {
         );
 
         if (v == null || v.getMethod() == null) {
-            redis.opsForValue().set(key, "", Duration.ofMinutes(2));
+            redis.opsForValue().set(key, "NONE", Duration.ofMinutes(2));
             return Collections.emptyList();
         }
 

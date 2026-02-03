@@ -125,7 +125,6 @@ public class AuthController {
     @PostMapping("/getCode")
     public Result<Void> sendCode(String mobile) {
         String ip = IpUtil.getClientIp(request);
-
         return authService.sendCode("auth", mobile, ip);
     }
 

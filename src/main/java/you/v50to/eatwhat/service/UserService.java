@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.vo.Result;
-import you.v50to.eatwhat.data.vo.UserInfoVO;
+import you.v50to.eatwhat.data.dto.UserInfoDTO;
 import you.v50to.eatwhat.mapper.UserMapper;
 
 @Service
@@ -16,9 +16,9 @@ public class UserService {
     @Resource
     private UserMapper userMapper;
 
-    public Result<UserInfoVO> getInfo() {
+    public Result<UserInfoDTO> getInfo() {
         Long userId = StpUtil.getLoginIdAsLong();
-        UserInfoVO info = userMapper.selectUserInfoById(userId);
+        UserInfoDTO info = userMapper.selectUserInfoById(userId);
         if (info == null) {
             return Result.fail(BizCode.USER_NOT_FOUND);
         }

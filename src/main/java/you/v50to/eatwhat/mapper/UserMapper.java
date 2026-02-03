@@ -5,7 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import you.v50to.eatwhat.data.po.User;
-import you.v50to.eatwhat.data.vo.UserInfoVO;
+import you.v50to.eatwhat.data.dto.UserInfoDTO;
 
 @Mapper
 public interface UserMapper extends BaseMapper<User> {
@@ -29,5 +29,5 @@ public interface UserMapper extends BaseMapper<User> {
             WHERE u.id = #{userId}
             LIMIT 1
             """)
-    UserInfoVO selectUserInfoById(@Param("userId") Long userId);
+    UserInfoDTO selectUserInfoById(@Param("userId") Long userId);
 }

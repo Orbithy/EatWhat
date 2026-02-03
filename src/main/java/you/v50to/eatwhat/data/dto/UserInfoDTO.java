@@ -3,8 +3,6 @@ package you.v50to.eatwhat.data.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.OffsetDateTime;
-
 @Data
 @NoArgsConstructor
 public class UserInfoDTO {
@@ -18,6 +16,6 @@ public class UserInfoDTO {
     private String studentId;
     private String realName;
     private String verifiedEmail;
-    private OffsetDateTime createdAt;
-    private OffsetDateTime updatedAt;
+    private Long createdAt;
+    private Long updatedAt;
 }

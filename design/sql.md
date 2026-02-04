@@ -226,6 +226,8 @@ CREATE TABLE contacts (
   updated_at    timestamptz  NOT NULL DEFAULT now()
 );
 
+CREATE INDEX idx_contacts_account_id ON contacts (account_id);
+
 CREATE TABLE verifications (
   id            bigserial PRIMARY KEY,
   account_id    bigint      NOT NULL REFERENCES users(id),
@@ -277,6 +279,23 @@ CREATE TABLE user_info (
 CREATE INDEX idx_userinfo_hometown ON user_info(hometown_province_id, hometown_city_id);
 CREATE INDEX idx_userinfo_location ON user_info(location_province_id, location_city_id);
 
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_contacts_updated_at BEFORE UPDATE ON contacts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_verifications_updated_at BEFORE UPDATE ON verifications
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_user_info_updated_at BEFORE UPDATE ON user_info
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -312,7 +331,6 @@ CREATE TABLE activity_likes (
 );
 
 -- 索引
-CREATE UNIQUE INDEX idx_activity_likes_unique ON activity_likes(account_id, target_type, activity_id);
 CREATE INDEX idx_activity_likes_target ON activity_likes(target_type, activity_id);
 CREATE INDEX idx_activity_likes_account ON activity_likes(account_id, created_at DESC);
 
@@ -351,14 +369,6 @@ CREATE INDEX idx_notifications_account_created ON notifications(account_id, crea
 CREATE INDEX idx_notifications_target ON notifications(target_type, target_id);
 CREATE INDEX idx_notifications_expires ON notifications(expires_at) WHERE read_at IS NOT NULL;
 
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
 CREATE TRIGGER update_activity_foods_updated_at BEFORE UPDATE ON activity_foods
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -367,6 +377,28 @@ CREATE TRIGGER update_activity_likes_updated_at BEFORE UPDATE ON activity_likes
 
 CREATE TRIGGER update_activity_dinners_updated_at BEFORE UPDATE ON activity_dinners
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE follow (
+  id            bigserial PRIMARY KEY,
+  account_id    bigint      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_id     bigint      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(account_id, target_id)
+);
+
+-- 索引
+CREATE INDEX idx_follow_target ON follow(target_id, created_at DESC);
+
+CREATE TABLE privacy (
+  id            bigserial PRIMARY KEY,
+  account_id    bigint      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  following     boolean     NOT NULL DEFAULT true,
+  follower      boolean     NOT NULL DEFAULT true,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(account_id)
+);
+
+-- 索引
 
 -- ============================================
 -- 触发器：自动维护点赞数缓存
@@ -407,7 +439,11 @@ BEGIN
       END IF;
     END IF;
   END IF;
-  RETURN NEW;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  ELSE
+    RETURN NEW;
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
 

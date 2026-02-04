@@ -122,7 +122,6 @@ CREATE TABLE privacy (
 );
 
 -- 索引
-CREATE UNIQUE INDEX idx_privacy_account ON privacy(account_id);
 
 -- ============================================
 -- 触发器：自动维护点赞数缓存
@@ -175,4 +174,3 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER update_likes_count_trigger
   AFTER INSERT OR UPDATE OR DELETE ON activity_likes
   FOR EACH ROW EXECUTE FUNCTION update_likes_count();
-

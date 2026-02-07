@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 import you.v50to.eatwhat.data.dto.*;
 import you.v50to.eatwhat.data.enums.Scene;
+import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.UserService;
 import you.v50to.eatwhat.utils.IpUtil;
@@ -63,24 +64,34 @@ public class UserController {
      * 获取粉丝列表
      *
      * @param userId 用户ID，不传则为当前用户
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
      * @return 粉丝列表
      */
     @SaCheckLogin
     @GetMapping("/followers")
-    public Result<List<FansDTO>> getFollowers(@RequestParam(required = false) Long userId) {
-        return userService.getFollowers(userId);
+    public Result<PageResult<FansDTO>> getFollowers(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return userService.getFollowers(userId, page, pageSize);
     }
 
     /**
      * 获取关注列表
      *
      * @param userId 用户ID，不传则为当前用户
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
      * @return 关注列表
      */
     @SaCheckLogin
     @GetMapping("/followings")
-    public Result<List<FansDTO>> getFollowings(@RequestParam(required = false) Long userId) {
-        return userService.getFollowings(userId);
+    public Result<PageResult<FansDTO>> getFollowings(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return userService.getFollowings(userId, page, pageSize);
     }
 
     /**

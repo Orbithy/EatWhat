@@ -12,6 +12,7 @@ import you.v50to.eatwhat.data.enums.Scene;
 import you.v50to.eatwhat.data.po.Contact;
 import you.v50to.eatwhat.data.po.Privacy;
 import you.v50to.eatwhat.data.po.UserInfo;
+import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.ContactMapper;
 import you.v50to.eatwhat.mapper.FollowMapper;
@@ -152,11 +153,25 @@ public class UserService {
     /**
      * 获取粉丝列表
      *
+     * @param userId 用户ID，不传则为当前用户
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
      * @return 粉丝列表
      */
-    public Result<List<FansDTO>> getFollowers(Long userId) {
+    public Result<PageResult<FansDTO>> getFollowers(Long userId, Integer page, Integer pageSize) {
         if (userId == null  || userId <= 0) {
             userId = StpUtil.getLoginIdAsLong();
+        }
+
+        // 参数校验和默认值
+        if (page == null || page < 1) {
+            page = 1;
+        }
+        if (pageSize == null || pageSize < 1) {
+            pageSize = 20;
+        }
+        if (pageSize > 100) {
+            pageSize = 100; // 限制最大每页数量
         }
 
         // 检查隐私设置
@@ -180,8 +195,16 @@ public class UserService {
             return Result.fail(BizCode.NOT_SUPPORTED, "未公开");
         }
 
-        List<FansDTO> followers = followMapper.selectFollowersByTargetId(userId);
-        return Result.ok(followers);
+        // 计算偏移量
+        int offset = (page - 1) * pageSize;
+
+        // 查询数据和总数
+        List<FansDTO> followers = followMapper.selectFollowersByTargetId(userId, offset, pageSize);
+        Long totalItems = followMapper.countFollowersByTargetId(userId);
+
+        // 构建分页结果
+        PageResult<FansDTO> pageResult = PageResult.of(followers, page, pageSize, totalItems);
+        return Result.ok(pageResult);
     }
 
     public Result<Void> changePrivacy(PrivacyDTO dto) {
@@ -193,9 +216,28 @@ public class UserService {
         return Result.ok();
     }
 
-    public Result<List<FansDTO>> getFollowings(Long userId) {
+    /**
+     * 获取关注列表
+     *
+     * @param userId 用户ID，不传则为当前用户
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @return 关注列表
+     */
+    public Result<PageResult<FansDTO>> getFollowings(Long userId, Integer page, Integer pageSize) {
         if (userId == null  || userId <= 0) {
             userId = StpUtil.getLoginIdAsLong();
+        }
+
+        // 参数校验和默认值
+        if (page == null || page < 1) {
+            page = 1;
+        }
+        if (pageSize == null || pageSize < 1) {
+            pageSize = 20;
+        }
+        if (pageSize > 100) {
+            pageSize = 100; // 限制最大每页数量
         }
 
         // 检查隐私设置
@@ -219,7 +261,15 @@ public class UserService {
             return Result.fail(BizCode.NOT_SUPPORTED, "未公开");
         }
 
-        List<FansDTO> followers = followMapper.selectFollowingsByTargetId(userId);
-        return Result.ok(followers);
+        // 计算偏移量
+        int offset = (page - 1) * pageSize;
+
+        // 查询数据和总数
+        List<FansDTO> followings = followMapper.selectFollowingsByAccountId(userId, offset, pageSize);
+        Long totalItems = followMapper.countFollowingsByAccountId(userId);
+
+        // 构建分页结果
+        PageResult<FansDTO> pageResult = PageResult.of(followings, page, pageSize, totalItems);
+        return Result.ok(pageResult);
     }
 }

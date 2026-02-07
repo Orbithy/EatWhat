@@ -55,7 +55,7 @@ public class UserController {
      * @return 更新结果
      */
     @SaCheckLogin
-    @PutMapping("/info")
+    @PutMapping("/updateInfo")
     public Result<Void> updateInfo(@Valid @RequestBody UpdateUserInfoDTO dto) {
         return userService.updateUserInfo(dto);
     }

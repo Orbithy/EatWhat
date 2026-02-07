@@ -1,5 +1,6 @@
 package you.v50to.eatwhat.config;
 
+import io.sentry.Sentry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -37,12 +38,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadSqlGrammarException.class)
     public Result<Void> handleBadSql(BadSqlGrammarException e) {
         log.error(e.getMessage());
+        Sentry.captureException(e);
         return Result.fail(BizCode.DB_ERROR, "数据库未初始化或表不存在");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public Result<Void> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
         log.error(ex.getMessage(), ex);
+        Sentry.captureException(ex);
         return Result.fail(BizCode.PARAM_INVALID);
     }
 
@@ -57,6 +60,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Result<Void> handleAll(Exception e) {
         log.error(e.getMessage(), e);
+        Sentry.captureException(e);
         return Result.fail(BizCode.UNKNOWN_ERROR);
     }
 }

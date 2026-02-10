@@ -69,6 +69,25 @@ app:
   oauth-url: https://i.sdu.edu.cn/cas/proxy/login/page?forward=https%3A%2F%2Fv50to.you%2api%2v1%2auth%2callback  # OAuth回调地址，根据实际情况修改
   jwt:
     key: ${JWT_SECRET}
+  storage:
+    s3:
+      endpoint: ${S3_ENDPOINT}
+      region: ${S3_REGION}
+      bucket: ${S3_BUCKET}
+      access-key: ${S3_ACCESS_KEY}
+      secret-key: ${S3_SECRET_KEY}
+      path-style: ${S3_PATH_STYLE:true}
+      sign-get-ttl-seconds: ${S3_SIGN_GET_TTL:600}
+      sign-put-ttl-seconds: ${S3_SIGN_PUT_TTL:300}
+      max-file-size-bytes: ${S3_MAX_FILE_SIZE:5242880}
+      allowed-content-types:
+        - image/jpeg
+        - image/png
+        - image/webp
+        - image/gif
+      allowed-read-prefixes:
+        - activity/
+        - avatar/
 
 sentry:
   dsn:

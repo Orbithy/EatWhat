@@ -18,6 +18,7 @@ import you.v50to.eatwhat.mapper.FollowMapper;
 import you.v50to.eatwhat.mapper.PrivacyMapper;
 import you.v50to.eatwhat.mapper.UserInfoMapper;
 import you.v50to.eatwhat.mapper.UserMapper;
+import you.v50to.eatwhat.service.storage.ObjectStorageService;
 import you.v50to.eatwhat.utils.LocationValidationUtil;
 
 import java.util.List;
@@ -42,6 +43,8 @@ public class UserService {
     private LocationValidationUtil locationValidationUtil;
     @Resource
     private StringRedisTemplate redis;
+    @Resource
+    private ObjectStorageService objectStorageService;
 
     public Result<UserInfoDTO> getInfo() {
         Long userId = StpUtil.getLoginIdAsLong();
@@ -49,6 +52,7 @@ public class UserService {
         if (info == null) {
             return Result.fail(BizCode.USER_NOT_FOUND);
         }
+        info.setAvatar(objectStorageService.signGetUrl(info.getAvatar()));
         return Result.ok(info);
     }
 
@@ -199,6 +203,7 @@ public class UserService {
 
         // 查询数据和总数
         List<FansDTO> followers = followMapper.selectFollowersByTargetId(userId, offset, pageSize);
+        signFansAvatar(followers);
         Long totalItems = followMapper.countFollowersByTargetId(userId);
 
         // 构建分页结果
@@ -265,6 +270,7 @@ public class UserService {
 
         // 查询数据和总数
         List<FansDTO> followings = followMapper.selectFollowingsByAccountId(userId, offset, pageSize);
+        signFansAvatar(followings);
         Long totalItems = followMapper.countFollowingsByAccountId(userId);
 
         // 构建分页结果
@@ -287,7 +293,18 @@ public class UserService {
             return Result.fail(BizCode.USER_NOT_FOUND);
         }
 
+        info.setAvatar(objectStorageService.signGetUrl(info.getAvatar()));
+
         return Result.ok(info);
+    }
+
+    private void signFansAvatar(List<FansDTO> fans) {
+        if (fans == null || fans.isEmpty()) {
+            return;
+        }
+        for (FansDTO fan : fans) {
+            fan.setAvatar(objectStorageService.signGetUrl(fan.getAvatar()));
+        }
     }
 
     public Result<Void> follow(Long userId) {

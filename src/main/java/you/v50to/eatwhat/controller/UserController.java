@@ -116,4 +116,22 @@ public class UserController {
     public Result<OtherUserInfoDTO> getUserInfo(@RequestParam Long userId) {
         return userService.getUserInfo(userId);
     }
+
+    /**
+     * 关注他人
+     */
+    @SaCheckLogin
+    @PostMapping("/follow")
+    public Result<Void> follow(@RequestParam Long userId) {
+        return userService.follow(userId);
+    }
+
+    /**
+     * 取消关注
+     */
+    @SaCheckLogin
+    @PostMapping("/unfollow")
+    public Result<Void> unfollow(@RequestParam Long userId) {
+        return userService.unfollow(userId);
+    }
 }

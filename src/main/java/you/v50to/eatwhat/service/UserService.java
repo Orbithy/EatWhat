@@ -4,15 +4,13 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import you.v50to.eatwhat.data.dto.*;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.enums.Scene;
-import you.v50to.eatwhat.data.po.Contact;
-import you.v50to.eatwhat.data.po.Privacy;
-import you.v50to.eatwhat.data.po.User;
-import you.v50to.eatwhat.data.po.UserInfo;
+import you.v50to.eatwhat.data.po.*;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.ContactMapper;
@@ -192,7 +190,7 @@ public class UserService {
             }
         }
 
-        if ("false".equals(v.toString())) {
+        if ("false".equals(v.toString()) && !userId.equals(StpUtil.getLoginIdAsLong())) {
             return Result.fail(BizCode.NOT_SUPPORTED, "未公开");
         }
 
@@ -258,7 +256,7 @@ public class UserService {
             }
         }
 
-        if ("false".equals(v.toString())) {
+        if ("false".equals(v.toString()) && !userId.equals(StpUtil.getLoginIdAsLong())) {
             return Result.fail(BizCode.NOT_SUPPORTED, "未公开");
         }
 
@@ -290,5 +288,30 @@ public class UserService {
         }
 
         return Result.ok(info);
+    }
+
+    public Result<Void> follow(Long userId) {
+        Long selfId = StpUtil.getLoginIdAsLong();
+        if (userId.equals(selfId)) {
+            return Result.fail(BizCode.OP_FAILED, "不能关注自己");
+        }
+        Follow f = new Follow();
+        f.setAccountId(selfId);
+        f.setTargetId(userId);
+        followMapper.insert(f);
+        try {
+            followMapper.insert(f);
+        } catch (DuplicateKeyException e) {
+            return Result.fail(BizCode.OP_FAILED, "你已经关注过TA了");
+        }
+        return Result.ok();
+    }
+
+    public Result<Void> unfollow(Long userId) {
+        Long selfId = StpUtil.getLoginIdAsLong();
+        followMapper.delete(new LambdaQueryWrapper<Follow>()
+                .eq(Follow::getAccountId, selfId)
+                .eq(Follow::getTargetId, userId));
+        return Result.ok();
     }
 }

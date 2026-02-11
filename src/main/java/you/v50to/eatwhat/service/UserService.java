@@ -315,7 +315,6 @@ public class UserService {
         Follow f = new Follow();
         f.setAccountId(selfId);
         f.setTargetId(userId);
-        followMapper.insert(f);
         try {
             followMapper.insert(f);
         } catch (DuplicateKeyException e) {

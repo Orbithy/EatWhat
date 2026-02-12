@@ -46,6 +46,8 @@ public class ActivityService {
     @Resource
     private ObjectStorageService objectStorageService;
     @Resource
+    private NotificationService notificationService;
+    @Resource
     private StringRedisTemplate redis;
     @Resource
     private ObjectMapper objectMapper;
@@ -228,6 +230,7 @@ public class ActivityService {
             like.setActivityId(dto.getActivityId());
             activityLikeMapper.insert(like);
             clearByTargetType(dto.getTargetType());
+            createLikeNotification(userId, dto.getTargetType(), dto.getActivityId());
             return Result.ok();
         }
 
@@ -240,6 +243,7 @@ public class ActivityService {
         record.setDeletedAt(null);
         activityLikeMapper.updateById(record);
         clearByTargetType(dto.getTargetType());
+        createLikeNotification(userId, dto.getTargetType(), dto.getActivityId());
         return Result.ok();
     }
 
@@ -312,6 +316,29 @@ public class ActivityService {
             redis.delete(keys);
         } catch (Exception ignored) {
         }
+    }
+
+    private void createLikeNotification(Long actorId, String targetType, Long activityId) {
+        Long receiverId = getTargetOwnerId(targetType, activityId);
+        if (receiverId == null) {
+            return;
+        }
+        notificationService.notifyLike(actorId, receiverId, targetType, activityId);
+    }
+
+    private Long getTargetOwnerId(String targetType, Long activityId) {
+        if ("food".equals(targetType)) {
+            ActivityFood food = activityFoodMapper.selectById(activityId);
+            if (food == null || food.getDeletedAt() != null) {
+                return null;
+            }
+            return food.getAccountId();
+        }
+        ActivityDinner dinner = activityDinnerMapper.selectById(activityId);
+        if (dinner == null || dinner.getDeletedAt() != null) {
+            return null;
+        }
+        return dinner.getAccountId();
     }
 
     private boolean targetExistsAndActive(String targetType, Long activityId) {

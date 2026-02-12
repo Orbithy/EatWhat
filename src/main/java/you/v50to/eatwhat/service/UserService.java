@@ -45,6 +45,8 @@ public class UserService {
     private StringRedisTemplate redis;
     @Resource
     private ObjectStorageService objectStorageService;
+    @Resource
+    private NotificationService notificationService;
 
     public Result<UserInfoDTO> getInfo() {
         Long userId = StpUtil.getLoginIdAsLong();
@@ -317,6 +319,7 @@ public class UserService {
         f.setTargetId(userId);
         try {
             followMapper.insert(f);
+            notificationService.notifyFollow(selfId, userId);
         } catch (DuplicateKeyException e) {
             return Result.fail(BizCode.OP_FAILED, "你已经关注过TA了");
         }

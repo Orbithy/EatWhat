@@ -40,6 +40,17 @@ public class ActivityController {
     }
 
     /**
+     * 按点赞数分页获取美食列表
+     * 仅登录用户可访问
+     */
+    @GetMapping("/foods/by-likes")
+    public Result<PageResult<ActivityFoodDTO>> listFoodsByLikes(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return activityService.listFoodsByLikes(page, pageSize);
+    }
+
+    /**
      * 获取美食详情
      * 仅登录用户可访问
      */
@@ -77,6 +88,17 @@ public class ActivityController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
         return activityService.listDinners(page, pageSize);
+    }
+
+    /**
+     * 按点赞数分页获取年夜饭列表
+     * 仅登录用户可访问
+     */
+    @GetMapping("/dinners/by-likes")
+    public Result<PageResult<ActivityDinnerDTO>> listDinnersByLikes(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return activityService.listDinnersByLikes(page, pageSize);
     }
 
     /**

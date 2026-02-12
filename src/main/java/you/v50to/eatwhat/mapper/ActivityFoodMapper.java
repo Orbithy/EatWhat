@@ -31,6 +31,16 @@ public interface ActivityFoodMapper extends BaseMapper<ActivityFood> {
     @Select("""
             SELECT *
             FROM activity_foods
+            WHERE deleted_at IS NULL
+            ORDER BY likes_count DESC, created_at DESC
+            LIMIT #{limit} OFFSET #{offset}
+            """)
+    List<ActivityFood> selectActiveFoodsOrderByLikes(@Param("offset") Integer offset,
+                                                     @Param("limit") Integer limit);
+
+    @Select("""
+            SELECT *
+            FROM activity_foods
             WHERE id = #{id} AND deleted_at IS NULL
             LIMIT 1
             """)

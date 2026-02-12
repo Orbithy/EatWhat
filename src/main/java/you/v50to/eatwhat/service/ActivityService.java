@@ -1,8 +1,11 @@
 package you.v50to.eatwhat.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import you.v50to.eatwhat.data.dto.*;
@@ -19,12 +22,18 @@ import you.v50to.eatwhat.service.storage.ObjectStorageService;
 import you.v50to.eatwhat.utils.LocationValidationUtil;
 
 import java.time.OffsetDateTime;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class ActivityService {
+
+    private static final String FOODS_BY_LIKES_CACHE_PREFIX = "activity:foods:byLikes:";
+    private static final String DINNERS_BY_LIKES_CACHE_PREFIX = "activity:dinners:byLikes:";
+    private static final Duration BY_LIKES_CACHE_TTL = Duration.ofMinutes(2);
 
     @Resource
     private ActivityFoodMapper activityFoodMapper;
@@ -36,6 +45,10 @@ public class ActivityService {
     private LocationValidationUtil locationValidationUtil;
     @Resource
     private ObjectStorageService objectStorageService;
+    @Resource
+    private StringRedisTemplate redis;
+    @Resource
+    private ObjectMapper objectMapper;
 
     @Transactional
     public Result<Void> publishFood(CreateActivityFoodDTO dto) {
@@ -54,6 +67,7 @@ public class ActivityService {
         food.setPictureUrl(toArray(dto.getPictureUrl()));
 
         activityFoodMapper.insert(food);
+        clearFoodByLikesCache();
         return Result.ok();
     }
 
@@ -78,6 +92,27 @@ public class ActivityService {
         return Result.ok(toFoodDTO(food));
     }
 
+    public Result<PageResult<ActivityFoodDTO>> listFoodsByLikes(Integer page, Integer pageSize) {
+        page = validPage(page);
+        pageSize = validPageSize(pageSize);
+
+        String cacheKey = byLikesCacheKey(FOODS_BY_LIKES_CACHE_PREFIX, page, pageSize);
+        PageResult<ActivityFoodDTO> cached = readByLikesCache(cacheKey, new TypeReference<PageResult<ActivityFoodDTO>>() {
+        });
+        if (cached != null) {
+            return Result.ok(cached);
+        }
+
+        int offset = (page - 1) * pageSize;
+        List<ActivityFood> foods = activityFoodMapper.selectActiveFoodsOrderByLikes(offset, pageSize);
+        Long totalItems = activityFoodMapper.countActiveFoods();
+        List<ActivityFoodDTO> items = foods.stream().map(this::toFoodDTO).toList();
+
+        PageResult<ActivityFoodDTO> result = PageResult.of(items, page, pageSize, totalItems);
+        writeByLikesCache(cacheKey, result);
+        return Result.ok(result);
+    }
+
     @Transactional
     public Result<Void> deleteFood(Long id) {
         ActivityFood food = activityFoodMapper.selectById(id);
@@ -94,6 +129,7 @@ public class ActivityService {
         // 软删除
         food.setDeletedAt(OffsetDateTime.now());
         activityFoodMapper.updateById(food);
+        clearFoodByLikesCache();
         return Result.ok();
     }
 
@@ -105,6 +141,7 @@ public class ActivityService {
         dinner.setPictureUrl(toArray(dto.getPictureUrl()));
 
         activityDinnerMapper.insert(dinner);
+        clearDinnerByLikesCache();
         return Result.ok();
     }
 
@@ -129,6 +166,27 @@ public class ActivityService {
         return Result.ok(toDinnerDTO(dinner));
     }
 
+    public Result<PageResult<ActivityDinnerDTO>> listDinnersByLikes(Integer page, Integer pageSize) {
+        page = validPage(page);
+        pageSize = validPageSize(pageSize);
+
+        String cacheKey = byLikesCacheKey(DINNERS_BY_LIKES_CACHE_PREFIX, page, pageSize);
+        PageResult<ActivityDinnerDTO> cached = readByLikesCache(cacheKey, new TypeReference<PageResult<ActivityDinnerDTO>>() {
+        });
+        if (cached != null) {
+            return Result.ok(cached);
+        }
+
+        int offset = (page - 1) * pageSize;
+        List<ActivityDinner> dinners = activityDinnerMapper.selectActiveDinnersOrderByLikes(offset, pageSize);
+        Long totalItems = activityDinnerMapper.countActiveDinners();
+        List<ActivityDinnerDTO> items = dinners.stream().map(this::toDinnerDTO).toList();
+
+        PageResult<ActivityDinnerDTO> result = PageResult.of(items, page, pageSize, totalItems);
+        writeByLikesCache(cacheKey, result);
+        return Result.ok(result);
+    }
+
     @Transactional
     public Result<Void> deleteDinner(Long id) {
         ActivityDinner dinner = activityDinnerMapper.selectById(id);
@@ -145,6 +203,7 @@ public class ActivityService {
         // 软删除：写 deleted_at
         dinner.setDeletedAt(OffsetDateTime.now());
         activityDinnerMapper.updateById(dinner);
+        clearDinnerByLikesCache();
         return Result.ok();
     }
 
@@ -168,6 +227,7 @@ public class ActivityService {
             like.setTargetType(dto.getTargetType());
             like.setActivityId(dto.getActivityId());
             activityLikeMapper.insert(like);
+            clearByTargetType(dto.getTargetType());
             return Result.ok();
         }
 
@@ -179,6 +239,7 @@ public class ActivityService {
         // 之前取消过点赞，恢复点赞
         record.setDeletedAt(null);
         activityLikeMapper.updateById(record);
+        clearByTargetType(dto.getTargetType());
         return Result.ok();
     }
 
@@ -198,7 +259,59 @@ public class ActivityService {
         // 软删除点赞记录
         record.setDeletedAt(OffsetDateTime.now());
         activityLikeMapper.updateById(record);
+        clearByTargetType(dto.getTargetType());
         return Result.ok();
+    }
+
+    private String byLikesCacheKey(String prefix, Integer page, Integer pageSize) {
+        return prefix + "page:" + page + ":size:" + pageSize;
+    }
+
+    private <T> PageResult<T> readByLikesCache(String key, TypeReference<PageResult<T>> typeReference) {
+        try {
+            String json = redis.opsForValue().get(key);
+            if (json == null || json.isBlank()) {
+                return null;
+            }
+            return objectMapper.readValue(json, typeReference);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void writeByLikesCache(String key, Object value) {
+        try {
+            String json = objectMapper.writeValueAsString(value);
+            redis.opsForValue().set(key, json, BY_LIKES_CACHE_TTL);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void clearByTargetType(String targetType) {
+        if ("food".equals(targetType)) {
+            clearFoodByLikesCache();
+            return;
+        }
+        clearDinnerByLikesCache();
+    }
+
+    private void clearFoodByLikesCache() {
+        clearByPrefix(FOODS_BY_LIKES_CACHE_PREFIX);
+    }
+
+    private void clearDinnerByLikesCache() {
+        clearByPrefix(DINNERS_BY_LIKES_CACHE_PREFIX);
+    }
+
+    private void clearByPrefix(String prefix) {
+        try {
+            Set<String> keys = redis.keys(prefix + "*");
+            if (keys == null || keys.isEmpty()) {
+                return;
+            }
+            redis.delete(keys);
+        } catch (Exception ignored) {
+        }
     }
 
     private boolean targetExistsAndActive(String targetType, Long activityId) {

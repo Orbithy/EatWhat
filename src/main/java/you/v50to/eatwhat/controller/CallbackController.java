@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.AuthService;
 
-@RequestMapping("/api/v1")
+@RequestMapping
 @RestController
 public class CallbackController {
 

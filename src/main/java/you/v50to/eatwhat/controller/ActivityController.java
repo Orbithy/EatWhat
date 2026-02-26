@@ -147,7 +147,7 @@ public class ActivityController {
      */
     @SaCheckRole("verified")
     @GetMapping("/{provinceId}/foods")
-    public Result<List<ActivityFoodDTO>> getFoodsByProvinceId(@PathVariable Integer provinceId,
+    public Result<PageResult<ActivityFoodDTO>> getFoodsByProvinceId(@PathVariable Integer provinceId,
                                                               @RequestParam(defaultValue = "1") Integer page,
                                                               @RequestParam(defaultValue = "20") Integer pageSize) {
         return activityService.getFoodsByProvinceId(provinceId, page, pageSize);

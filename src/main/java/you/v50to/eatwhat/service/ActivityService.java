@@ -410,7 +410,7 @@ public class ActivityService {
         return Math.min(pageSize, 100);
     }
 
-    public Result<List<ActivityFoodDTO>> getFoodsByProvinceId(Integer provinceId,  Integer page, Integer pageSize) {
+    public Result<PageResult<ActivityFoodDTO>> getFoodsByProvinceId(Integer provinceId,  Integer page, Integer pageSize) {
         if (page == null || page < 1) {
             page = 1;
         }
@@ -420,7 +420,8 @@ public class ActivityService {
         int offset = (page - 1) * pageSize;
         Long userId = StpUtil.getLoginIdAsLong();
         List<ActivityFood> records = activityFoodMapper.selectFoodsByProvinceWithLiked(provinceId, userId, offset, pageSize);
+        Long total = activityFoodMapper.countActiveFoodsByProvince(provinceId);
         List<ActivityFoodDTO> foods = records.stream().map(this::toFoodDTO).toList();
-        return Result.ok(foods);
+        return Result.ok(PageResult.of(foods, page, pageSize, total));
     }
 }

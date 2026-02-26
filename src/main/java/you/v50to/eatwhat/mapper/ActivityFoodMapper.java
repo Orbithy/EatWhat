@@ -65,4 +65,8 @@ public interface ActivityFoodMapper extends BaseMapper<ActivityFood> {
                                                       @Param("offset") Integer offset,
                                                       @Param("limit") Integer limit);
 
+    @Select("SELECT COUNT(*)" +
+            "FROM activity_foods " +
+            "WHERE province_id = #{provinceId}")
+    Long countActiveFoodsByProvince(@Param("provinceId") Integer provinceId);
 }

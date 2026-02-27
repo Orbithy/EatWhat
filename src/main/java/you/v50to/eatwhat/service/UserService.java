@@ -1,6 +1,7 @@
 package you.v50to.eatwhat.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -61,10 +62,13 @@ public class UserService {
     public Result<Void> getCode(SendCodeReq sendCodeReq, String ip) {
         Scene scene = sendCodeReq.getScene();
         String mobile = sendCodeReq.getMobile();
+        if (scene == null) {
+            return Result.fail(BizCode.PARAM_MISSING, "scene不能为空");
+        }
         if (!StpUtil.hasRole("verified")) {
             return Result.fail(BizCode.STATE_NOT_ALLOWED, "未通过认证，无法发送验证码");
         }
-        if (scene.equals(Scene.bind) && contactMapper.exists(new LambdaQueryWrapper<Contact>()
+        if (scene == Scene.bind && contactMapper.exists(new LambdaQueryWrapper<Contact>()
                 .eq(Contact::getAccountId, StpUtil.getLoginIdAsLong()))) {
             return Result.fail(BizCode.OP_FAILED, "已绑定手机号，无法重复绑定");
         }
@@ -226,11 +230,26 @@ public class UserService {
     }
 
     public Result<Void> changePrivacy(PrivacyDTO dto) {
+        Long userId = StpUtil.getLoginIdAsLong();
+
         Privacy p = new Privacy();
-        p.setAccountId(StpUtil.getLoginIdAsLong());
+        p.setAccountId(userId);
         p.setFollowing(dto.getFollowing());
         p.setFollower(dto.getFollower());
-        privacyMapper.updateById(p);
+
+        int updated = privacyMapper.update(p, new LambdaUpdateWrapper<Privacy>()
+                .eq(Privacy::getAccountId, userId));
+        if (updated == 0) {
+            // 兼容历史数据：不存在则插入（表上有 UNIQUE(account_id)）
+            privacyMapper.insert(p);
+        }
+
+        // 刷新/清理缓存，避免隐私设置长期不生效
+        String key = "privacy:" + userId;
+        try {
+            redis.delete(key);
+        } catch (Exception ignored) {
+        }
         return Result.ok();
     }
 

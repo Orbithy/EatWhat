@@ -76,7 +76,7 @@ public class NotificationService {
                 actorId,
                 "follow",
                 "user",
-                receiverId,
+                actorId,
                 "{}");
     }
 

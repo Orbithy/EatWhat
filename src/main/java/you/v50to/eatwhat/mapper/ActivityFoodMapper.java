@@ -19,45 +19,50 @@ public interface ActivityFoodMapper extends BaseMapper<ActivityFood> {
     Long countActiveFoods();
 
     @Select("""
-            SELECT *
-            FROM activity_foods
-            WHERE deleted_at IS NULL
-            ORDER BY created_at DESC
+            SELECT f.*, u.nick_name AS uploaderName
+            FROM activity_foods f
+            JOIN users u ON u.id = f.account_id
+            WHERE f.deleted_at IS NULL
+            ORDER BY f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
     List<ActivityFood> selectActiveFoods(@Param("offset") Integer offset,
                                          @Param("limit") Integer limit);
 
     @Select("""
-            SELECT *
-            FROM activity_foods
-            WHERE deleted_at IS NULL
-            ORDER BY likes_count DESC, created_at DESC
+            SELECT f.*, u.nick_name AS uploaderName
+            FROM activity_foods f
+            JOIN users u ON u.id = f.account_id
+            WHERE f.deleted_at IS NULL
+            ORDER BY f.likes_count DESC, f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
     List<ActivityFood> selectActiveFoodsOrderByLikes(@Param("offset") Integer offset,
                                                      @Param("limit") Integer limit);
 
     @Select("""
-            SELECT *
-            FROM activity_foods
-            WHERE id = #{id} AND deleted_at IS NULL
+            SELECT f.*, u.nick_name AS uploaderName
+            FROM activity_foods f
+            JOIN users u ON u.id = f.account_id
+            WHERE f.id = #{id} AND f.deleted_at IS NULL
             LIMIT 1
             """)
     ActivityFood selectActiveFoodById(@Param("id") Long id);
 
     @Select("""
             SELECT f.*,
+                   u.nick_name AS uploaderName,
                    CASE WHEN al.id IS NULL THEN FALSE ELSE TRUE END AS is_liked
             FROM activity_foods f
+            JOIN users u ON u.id = f.account_id
             LEFT JOIN activity_likes al
               ON al.activity_id = f.id
              AND al.account_id = #{accountId}
-             AND al.target_type = 'food'
-             AND al.deleted_at IS NULL
+              AND al.target_type = 'food'
+              AND al.deleted_at IS NULL
             WHERE f.province_id = #{provinceId}
               AND f.deleted_at IS NULL
-            ORDER BY f.created_at
+            ORDER BY f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
     List<ActivityFood> selectFoodsByProvinceWithLiked(@Param("provinceId") Integer provinceId,
@@ -66,7 +71,7 @@ public interface ActivityFoodMapper extends BaseMapper<ActivityFood> {
                                                       @Param("limit") Integer limit);
 
     @Select("SELECT COUNT(*)" +
-            "FROM activity_foods " +
-            "WHERE province_id = #{provinceId}")
+            " FROM activity_foods" +
+            " WHERE province_id = #{provinceId} AND deleted_at IS NULL")
     Long countActiveFoodsByProvince(@Param("provinceId") Integer provinceId);
 }

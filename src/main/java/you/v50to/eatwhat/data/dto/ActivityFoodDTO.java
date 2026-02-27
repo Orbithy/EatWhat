@@ -10,6 +10,8 @@ import java.util.List;
 public class ActivityFoodDTO {
     private Long id;
     private Long accountId;
+    /** 上传者昵称 */
+    private String uploaderName;
     private String foodName;
     private String description;
     private Integer provinceId;

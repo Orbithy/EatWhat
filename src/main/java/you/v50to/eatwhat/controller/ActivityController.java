@@ -10,8 +10,6 @@ import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.ActivityService;
 
-import java.util.List;
-
 @SaCheckLogin
 @RestController
 @RequestMapping("/activity")
@@ -145,11 +143,10 @@ public class ActivityController {
     /**
      * 根据省份获取美食
      */
-    @SaCheckRole("verified")
     @GetMapping("/{provinceId}/foods")
     public Result<PageResult<ActivityFoodDTO>> getFoodsByProvinceId(@PathVariable Integer provinceId,
-                                                              @RequestParam(defaultValue = "1") Integer page,
-                                                              @RequestParam(defaultValue = "20") Integer pageSize) {
+                                                                    @RequestParam(defaultValue = "1") Integer page,
+                                                                    @RequestParam(defaultValue = "20") Integer pageSize) {
         return activityService.getFoodsByProvinceId(provinceId, page, pageSize);
 
     }

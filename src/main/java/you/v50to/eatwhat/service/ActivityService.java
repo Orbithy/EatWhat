@@ -25,8 +25,10 @@ import java.time.OffsetDateTime;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class ActivityService {
@@ -82,7 +84,8 @@ public class ActivityService {
         List<ActivityFood> foods = activityFoodMapper.selectActiveFoods(offset, pageSize);
         Long totalItems = activityFoodMapper.countActiveFoods();
 
-        List<ActivityFoodDTO> items = foods.stream().map(this::toFoodDTO).toList();
+        Set<Long> likedFoodIds = queryLikedTargetIds(StpUtil.getLoginIdAsLong(), "food", foods.stream().map(ActivityFood::getId).toList());
+        List<ActivityFoodDTO> items = foods.stream().map(food -> toFoodDTO(food, likedFoodIds.contains(food.getId()))).toList();
         return Result.ok(PageResult.of(items, page, pageSize, totalItems));
     }
 
@@ -91,7 +94,8 @@ public class ActivityService {
         if (food == null) {
             return Result.fail(BizCode.OP_FAILED, "菜品不存在");
         }
-        return Result.ok(toFoodDTO(food));
+        Set<Long> likedFoodIds = queryLikedTargetIds(StpUtil.getLoginIdAsLong(), "food", List.of(id));
+        return Result.ok(toFoodDTO(food, likedFoodIds.contains(id)));
     }
 
     public Result<PageResult<ActivityFoodDTO>> listFoodsByLikes(Integer page, Integer pageSize) {
@@ -102,6 +106,7 @@ public class ActivityService {
         PageResult<ActivityFoodDTO> cached = readByLikesCache(cacheKey, new TypeReference<PageResult<ActivityFoodDTO>>() {
         });
         if (cached != null) {
+            applyFoodLikedState(cached.getItems(), StpUtil.getLoginIdAsLong());
             return Result.ok(cached);
         }
 
@@ -112,6 +117,7 @@ public class ActivityService {
 
         PageResult<ActivityFoodDTO> result = PageResult.of(items, page, pageSize, totalItems);
         writeByLikesCache(cacheKey, result);
+        applyFoodLikedState(result.getItems(), StpUtil.getLoginIdAsLong());
         return Result.ok(result);
     }
 
@@ -350,17 +356,54 @@ public class ActivityService {
         return dinner != null && dinner.getDeletedAt() == null;
     }
 
+    private Set<Long> queryLikedTargetIds(Long accountId, String targetType, List<Long> targetIds) {
+        if (accountId == null || targetIds == null || targetIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        List<ActivityLike> records = activityLikeMapper.selectList(new LambdaQueryWrapper<ActivityLike>()
+                .eq(ActivityLike::getAccountId, accountId)
+                .eq(ActivityLike::getTargetType, targetType)
+                .isNull(ActivityLike::getDeletedAt)
+                .in(ActivityLike::getActivityId, targetIds));
+
+        if (records == null || records.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return records.stream().map(ActivityLike::getActivityId).collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private void applyFoodLikedState(List<ActivityFoodDTO> foods, Long accountId) {
+        if (foods == null || foods.isEmpty()) {
+            return;
+        }
+        List<Long> foodIds = foods.stream().map(ActivityFoodDTO::getId).toList();
+        Set<Long> likedFoodIds = queryLikedTargetIds(accountId, "food", foodIds);
+        for (ActivityFoodDTO food : foods) {
+            food.setIsLiked(likedFoodIds.contains(food.getId()));
+        }
+    }
+
     private ActivityFoodDTO toFoodDTO(ActivityFood food) {
+        return toFoodDTO(food, null);
+    }
+
+    private ActivityFoodDTO toFoodDTO(ActivityFood food, Boolean isLiked) {
         ActivityFoodDTO dto = new ActivityFoodDTO();
         dto.setId(food.getId());
         dto.setAccountId(food.getAccountId());
+        dto.setUploaderName(food.getUploaderName());
         dto.setFoodName(food.getFoodName());
         dto.setDescription(food.getDescription());
         dto.setProvinceId(food.getProvinceId());
         dto.setCityId(food.getCityId());
         dto.setPictureUrl(objectStorageService.signGetUrls(toList(food.getPictureUrl())));
         dto.setLikesCount(food.getLikesCount());
-        dto.setIsLiked(Boolean.TRUE.equals(food.getIsLiked()));
+        if (isLiked == null) {
+            dto.setIsLiked(Boolean.TRUE.equals(food.getIsLiked()));
+        } else {
+            dto.setIsLiked(isLiked);
+        }
         dto.setCreatedAt(toEpochMilli(food.getCreatedAt()));
         dto.setUpdatedAt(toEpochMilli(food.getUpdatedAt()));
         return dto;

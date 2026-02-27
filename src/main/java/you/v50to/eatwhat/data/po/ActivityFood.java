@@ -17,6 +17,8 @@ public class ActivityFood {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long accountId;
+    @TableField(exist = false)
+    private String uploaderName;
     private String foodName;
     private String description;
     private Integer provinceId;

@@ -17,6 +17,14 @@ import you.v50to.eatwhat.service.storage.ObjectStorageService;
 
 import java.util.List;
 
+/**
+ * 上传预签名接口。
+ * <ul>
+ * <li>biz=avatar — 仅需登录（未验证用户也可更换头像）</li>
+ * <li>biz=activity — 需要完成 SSO / 邮箱验证（拥有 verified 角色）</li>
+ * </ul>
+ */
+
 @SaCheckLogin
 @RestController
 @RequestMapping("/upload")
@@ -28,13 +36,15 @@ public class UploadController {
     @PostMapping("/presign")
     public Result<PresignUploadRespDTO> presign(@Valid @RequestBody PresignUploadReqDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
+        if ("activity".equals(dto.getBiz()) && !StpUtil.hasRole("verified")) {
+            throw new BizException(BizCode.STATE_NOT_ALLOWED, "上传活动照片需要完成身份认证");
+        }
         ObjectStorageService.PresignedUpload presigned = objectStorageService.presignPut(
                 userId,
                 dto.getBiz(),
                 dto.getFileName(),
                 dto.getContentType(),
-                dto.getFileSize()
-        );
+                dto.getFileSize());
         PresignUploadRespDTO resp = new PresignUploadRespDTO(presigned.putUrl(), presigned.key(), presigned.expireAt());
         return Result.ok(resp);
     }
@@ -45,6 +55,9 @@ public class UploadController {
             throw new BizException(BizCode.PARAM_INVALID, "文件列表不能为空");
         }
         Long userId = StpUtil.getLoginIdAsLong();
+        if ("activity".equals(dto.getBiz()) && !StpUtil.hasRole("verified")) {
+            throw new BizException(BizCode.STATE_NOT_ALLOWED, "上传活动照片需要完成身份认证");
+        }
         List<PresignUploadRespDTO> files = dto.getFiles().stream()
                 .map(file -> {
                     ObjectStorageService.PresignedUpload presigned = objectStorageService.presignPut(
@@ -52,8 +65,7 @@ public class UploadController {
                             dto.getBiz(),
                             file.getFileName(),
                             file.getContentType(),
-                            file.getFileSize()
-                    );
+                            file.getFileSize());
                     return new PresignUploadRespDTO(presigned.putUrl(), presigned.key(), presigned.expireAt());
                 })
                 .toList();

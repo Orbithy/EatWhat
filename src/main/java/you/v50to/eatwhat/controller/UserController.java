@@ -1,6 +1,7 @@
 package you.v50to.eatwhat.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -131,5 +132,36 @@ public class UserController {
     @PostMapping("/unfollow")
     public Result<Void> unfollow(@RequestParam Long userId) {
         return userService.unfollow(userId);
+    }
+
+// ==================== Admin API ====================
+
+    /**
+     * 获取用户列表
+     */
+    @SaCheckRole("admin")
+    @GetMapping("/list")
+    public Result<PageResult<UserInfoDTO>> listUsers(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return userService.listUsers(page, pageSize);
+    }
+
+    /**
+     * 封禁用户（永久）
+     */
+    @SaCheckRole("admin")
+    @PostMapping("/ban/{userId}")
+    public Result<Void> banUser(@PathVariable Long userId) {
+        return userService.banUser(userId);
+    }
+
+    /**
+     * 解封用户
+     */
+    @SaCheckRole("admin")
+    @PostMapping("/unban/{userId}")
+    public Result<Void> unbanUser(@PathVariable Long userId) {
+        return userService.unbanUser(userId);
     }
 }

@@ -2,7 +2,6 @@ package you.v50to.eatwhat.config;
 
 import io.sentry.Sentry;
 import io.sentry.SentryLevel;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.jdbc.BadSqlGrammarException;
@@ -26,14 +25,24 @@ public class GlobalExceptionHandler {
         return Result.fail(BizCode.NOT_LOGIN);
     }
 
+    @ExceptionHandler(cn.dev33.satoken.exception.DisableLoginException.class)
+    public Result<Void> disableLoginExceptionHandler() {
+        return Result.fail(BizCode.USER_DISABLED);
+    }
+
     @ExceptionHandler(cn.dev33.satoken.exception.NotRoleException.class)
-    public Result<Void> notRoleExceptionHandler() {
-        return Result.fail(BizCode.NO_PERMISSION, "用户未验证");
+    public Result<Void> notRoleExceptionHandler(cn.dev33.satoken.exception.NotRoleException e) {
+        String msg = switch (e.getRole()) {
+            case "verified" -> "用户未验证";
+            case "admin" -> "需要管理员权限";
+            default -> "权限不足";
+        };
+        return Result.fail(BizCode.NO_PERMISSION, msg);
     }
 
     @ExceptionHandler(cn.dev33.satoken.exception.NotPermissionException.class)
     public Result<Void> notPermissionExceptionHandler() {
-        return Result.fail(BizCode.NO_PERMISSION, "用户未验证");
+        return Result.fail(BizCode.NO_PERMISSION, "权限不足");
     }
 
     /**

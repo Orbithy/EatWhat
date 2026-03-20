@@ -12,6 +12,7 @@ public class UserInfoDTO {
     private Long id;
     private String userName;
     private String avatar;
+    private String role;
     private String email;
     private String phone;
     private Boolean verified;

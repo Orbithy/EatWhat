@@ -1,6 +1,7 @@
 package you.v50to.eatwhat.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -72,4 +73,26 @@ public interface UserMapper extends BaseMapper<User> {
             LIMIT 1
             """)
     OtherUserInfoDTO selectOtherUserInfo(@Param("userId") Long userId, @Param("currentUserId") Long currentUserId);
+
+    @Select("""
+            SELECT
+                u.id,
+                u.nick_name AS userName,
+                u.avatar,
+                u.role,
+                CAST(EXTRACT(EPOCH FROM u.created_at) * 1000 AS bigint) AS createdAt,
+                CAST(EXTRACT(EPOCH FROM u.updated_at) * 1000 AS bigint) AS updatedAt,
+                c.email,
+                c.phone,
+                v.verified,
+                v.method,
+                v.student_id AS studentId,
+                v.real_name AS realName,
+                v.verified_email AS verifiedEmail
+            FROM users u
+            LEFT JOIN contacts c ON c.account_id = u.id
+            LEFT JOIN verifications v ON v.account_id = u.id
+            ORDER BY u.id ASC
+            """)
+    IPage<UserInfoDTO> selectUserPage(IPage<UserInfoDTO> page);
 }

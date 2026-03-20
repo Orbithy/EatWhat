@@ -3,6 +3,8 @@ package you.v50to.eatwhat.service;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -23,6 +25,9 @@ import you.v50to.eatwhat.service.storage.ObjectStorageService;
 import you.v50to.eatwhat.utils.LocationValidationUtil;
 
 import java.util.List;
+
+import static you.v50to.eatwhat.utils.ValidUtil.validPage;
+import static you.v50to.eatwhat.utils.ValidUtil.validPageSize;
 
 @Service
 @Slf4j
@@ -362,6 +367,46 @@ public class UserService {
         followMapper.delete(new LambdaQueryWrapper<Follow>()
                 .eq(Follow::getAccountId, selfId)
                 .eq(Follow::getTargetId, userId));
+        return Result.ok();
+    }
+
+    public Result<PageResult<UserInfoDTO>> listUsers(Integer page, Integer pageSize) {
+        page = validPage(page);
+        pageSize = validPageSize(pageSize);
+
+        IPage<UserInfoDTO> result = userMapper.selectUserPage(new Page<>(page, pageSize));
+        result.getRecords().forEach(u -> u.setAvatar(objectStorageService.signGetUrl(u.getAvatar())));
+
+        return Result.ok(PageResult.of(result.getRecords(), result.getCurrent(), result.getSize(), result.getTotal()));
+    }
+
+    /**
+     * 封禁用户（永久）
+     * 不能封禁管理员
+     */
+    public Result<Void> banUser(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return Result.fail(BizCode.USER_NOT_FOUND);
+        }
+        if ("admin".equals(user.getRole())) {
+            return Result.fail(BizCode.OP_FAILED, "不能封禁管理员");
+        }
+        // 踢出所有已登录 token，并永久封禁（-1 表示永久）
+        StpUtil.logout(userId);
+        StpUtil.disable(userId, -1);
+        return Result.ok();
+    }
+
+    /**
+     * 解封用户
+     */
+    public Result<Void> unbanUser(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return Result.fail(BizCode.USER_NOT_FOUND);
+        }
+        StpUtil.untieDisable(userId);
         return Result.ok();
     }
 }

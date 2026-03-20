@@ -1,5 +1,7 @@
 package you.v50to.eatwhat.controller;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -10,6 +12,7 @@ import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.RestaurantService;
 
+@SaCheckLogin
 @RestController
 @RequestMapping("/restaurant")
 public class RestaurantController {
@@ -22,11 +25,16 @@ public class RestaurantController {
         return restaurantService.searchRestaurants(dto);
     }
 
+    @SaCheckRole("verified")
     @PostMapping("/add")
     public Result<Void> addRestaurant(@Valid @RequestBody RestaurantDTO restaurant) {
         return restaurantService.addRestaurant(restaurant);
     }
 
-
+    @SaCheckRole("verified")
+    @GetMapping("/detail/{id}")
+    public Result<Restaurant> getRestaurantDetail(@PathVariable Long id) {
+        return restaurantService.getRestaurantDetail(id);
+    }
 
 }

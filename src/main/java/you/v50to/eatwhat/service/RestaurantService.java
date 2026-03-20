@@ -46,4 +46,8 @@ public class RestaurantService {
         return Result.ok();
     }
 
+    public Result<Restaurant> getRestaurantDetail(Long id) {
+        Restaurant restaurant = restaurantMapper.selectById(id);
+        return Result.ok(restaurant);
+    }
 }

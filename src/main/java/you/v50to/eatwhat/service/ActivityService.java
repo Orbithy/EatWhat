@@ -30,6 +30,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static you.v50to.eatwhat.utils.ValidUtil.validPage;
+import static you.v50to.eatwhat.utils.ValidUtil.validPageSize;
+
 @Service
 public class ActivityService {
 
@@ -86,7 +89,7 @@ public class ActivityService {
 
         Set<Long> likedFoodIds = queryLikedTargetIds(StpUtil.getLoginIdAsLong(), "food", foods.stream().map(ActivityFood::getId).toList());
         List<ActivityFoodDTO> items = foods.stream().map(food -> toFoodDTO(food, likedFoodIds.contains(food.getId()))).toList();
-        return Result.ok(PageResult.of(items, page, pageSize, totalItems));
+        return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems));
     }
 
     public Result<ActivityFoodDTO> getFoodDetail(Long id) {
@@ -115,7 +118,7 @@ public class ActivityService {
         Long totalItems = activityFoodMapper.countActiveFoods();
         List<ActivityFoodDTO> items = foods.stream().map(this::toFoodDTO).toList();
 
-        PageResult<ActivityFoodDTO> result = PageResult.of(items, page, pageSize, totalItems);
+        PageResult<ActivityFoodDTO> result = PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems);
         writeByLikesCache(cacheKey, result);
         applyFoodLikedState(result.getItems(), StpUtil.getLoginIdAsLong());
         return Result.ok(result);
@@ -163,7 +166,7 @@ public class ActivityService {
         Long totalItems = activityDinnerMapper.countActiveDinners();
 
         List<ActivityDinnerDTO> items = dinners.stream().map(this::toDinnerDTO).toList();
-        return Result.ok(PageResult.of(items, page, pageSize, totalItems));
+        return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems));
     }
 
     public Result<ActivityDinnerDTO> getDinnerDetail(Long id) {
@@ -190,7 +193,7 @@ public class ActivityService {
         Long totalItems = activityDinnerMapper.countActiveDinners();
         List<ActivityDinnerDTO> items = dinners.stream().map(this::toDinnerDTO).toList();
 
-        PageResult<ActivityDinnerDTO> result = PageResult.of(items, page, pageSize, totalItems);
+        PageResult<ActivityDinnerDTO> result = PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems);
         writeByLikesCache(cacheKey, result);
         return Result.ok(result);
     }
@@ -439,19 +442,7 @@ public class ActivityService {
         return Arrays.asList(pictureUrl);
     }
 
-    private Integer validPage(Integer page) {
-        if (page == null || page < 1) {
-            return 1;
-        }
-        return page;
-    }
 
-    private Integer validPageSize(Integer pageSize) {
-        if (pageSize == null || pageSize < 1) {
-            return 20;
-        }
-        return Math.min(pageSize, 100);
-    }
 
     public Result<PageResult<ActivityFoodDTO>> getFoodsByProvinceId(Integer provinceId,  Integer page, Integer pageSize) {
         if (page == null || page < 1) {
@@ -465,6 +456,6 @@ public class ActivityService {
         List<ActivityFood> records = activityFoodMapper.selectFoodsByProvinceWithLiked(provinceId, userId, offset, pageSize);
         Long total = activityFoodMapper.countActiveFoodsByProvince(provinceId);
         List<ActivityFoodDTO> foods = records.stream().map(this::toFoodDTO).toList();
-        return Result.ok(PageResult.of(foods, page, pageSize, total));
+        return Result.ok(PageResult.of(foods, page.longValue(), pageSize.longValue(), total));
     }
 }

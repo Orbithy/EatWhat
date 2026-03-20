@@ -18,7 +18,7 @@ public class PageResult<T> {
     /**
      * 当前页码（从1开始）
      */
-    private Integer currentPage;
+    private Long currentPage;
     
     /**
      * 数据列表
@@ -47,7 +47,7 @@ public class PageResult<T> {
      * @param pageSize 每页大小
      * @param totalItems 总记录数
      */
-    public static <T> PageResult<T> of(List<T> items, Integer currentPage, Integer pageSize, Long totalItems) {
+    public static <T> PageResult<T> of(List<T> items, Long currentPage, Long pageSize, Long totalItems) {
         PageResult<T> result = new PageResult<>();
         result.setCurrentPage(currentPage);
         result.setItems(items);

@@ -225,7 +225,7 @@ public class UserService {
         Long totalItems = followMapper.countFollowersByTargetId(userId);
 
         // 构建分页结果
-        PageResult<FansDTO> pageResult = PageResult.of(followers, page, pageSize, totalItems);
+        PageResult<FansDTO> pageResult = PageResult.of(followers, page.longValue(), pageSize.longValue(), totalItems);
         return Result.ok(pageResult);
     }
 
@@ -307,7 +307,7 @@ public class UserService {
         Long totalItems = followMapper.countFollowingsByAccountId(userId);
 
         // 构建分页结果
-        PageResult<FansDTO> pageResult = PageResult.of(followings, page, pageSize, totalItems);
+        PageResult<FansDTO> pageResult = PageResult.of(followings, page.longValue(), pageSize.longValue(), totalItems);
         return Result.ok(pageResult);
     }
 

@@ -22,6 +22,9 @@ public class Food {
 
     private Long accountId;
 
+    @TableField(exist = false)
+    private String uploaderName;
+
     private Long restaurantId;
 
     private String name;

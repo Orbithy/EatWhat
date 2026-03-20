@@ -224,26 +224,53 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 
 ## Restaurant（餐厅）
 
-| 字段              | 类型                                   | 含义                      |
-|-----------------|--------------------------------------|-------------------------|
-| id              | bigserial PRIMARY KEY                | 餐厅ID                    |
-| name            | text NOT NULL                        | 餐厅名称                    |
-| address         | text                                 | 地址描述                    |
-| location        | geography(Point, 4326) NOT NULL      | 坐标（WGS84，用于空间计算）        |
-| gcj_lng         | double precision NOT NULL            | GCJ02 经度（直接返回前端）        |
-| gcj_lat         | double precision NOT NULL            | GCJ02 纬度（直接返回前端）        |
-| mall_id         | bigint                               | 所属商场ID                  |
-| created_at      | timestamptz NOT NULL DEFAULT now()   | 创建时间                    |
-| updated_at      | timestamptz NOT NULL DEFAULT now()   | 更新时间                    |
+| 字段         | 类型                                 | 含义               |
+|------------|------------------------------------|------------------|
+| id         | bigserial PRIMARY KEY              | 餐厅ID             |
+| name       | text NOT NULL                      | 餐厅名称             |
+| address    | text                               | 地址描述             |
+| city_id    | int REFERENCES cities(id)          | 城市ID             |
+| location   | geography(Point, 4326) NOT NULL    | 坐标（WGS84，用于空间计算） |
+| gcj_lng    | double precision NOT NULL          | GCJ02 经度（直接返回前端） |
+| gcj_lat    | double precision NOT NULL          | GCJ02 纬度（直接返回前端） |
+| hub_id     | bigint                             | 所属商场ID           |
+| poi        | text UNIQUE                        | POI 信息           |
+| created_at | timestamptz NOT NULL DEFAULT now() | 创建时间             |
+| updated_at | timestamptz NOT NULL DEFAULT now() | 更新时间             |
 
 **说明：**
 - `location` 存储 WGS84 坐标，用于服务端空间计算（距离、范围查询等）
 - `gcj_lng` / `gcj_lat` 存储 GCJ02（火星坐标）冗余字段，直接返回给前端地图使用
 
 **索引：**
+- `idx_restaurant_poi` UNIQUE ON (poi) WHERE poi IS NOT NULL - POI 唯一索引
 - `idx_restaurant_location` USING GIST ON (location) - 空间索引（WGS84）
-- `idx_restaurant_mall` ON (mall_id) - 按商场查询
+- `idx_restaurant_hub` ON (hub_id) - 按商场查询
 
+## Foods
+
+| 字段              | 类型                                        | 含义              |
+|-----------------|-------------------------------------------|-----------------|
+| id              | bigserial PRIMARY KEY                     | 菜品ID            |
+| account_id      | bigint NOT NULL REFERENCES users(id)      | 上传用户ID          |
+| restaurant_id   | bigint NOT NULL REFERENCES restaurant(id) | 所属餐厅ID          |
+| name            | varchar(64) NOT NULL                      | 菜品名称            |
+| description     | text                                      | 菜品介绍            |
+| price           | numeric(8,2)                              | 参考价格（元）         |
+| category        | varchar(32) CHECK (category IN ('staple', 'drink', 'snack', 'dessert', 'soup', 'hot_pot', 'grill', 'cold_dish', 'side_dish', 'other')) | 菜品分类 |
+| picture_url     | text[]                                    | 菜品图片 URL        |
+| likes_count     | int NOT NULL DEFAULT 0                    | 点赞数缓存           |
+| created_at      | timestamptz NOT NULL DEFAULT now()        | 创建时间            |
+| updated_at      | timestamptz NOT NULL DEFAULT now()        | 更新时间            |
+
+**约束：**
+- `UNIQUE(restaurant_id, name)` - 同一餐厅下菜品名称唯一
+
+**索引：**
+- `idx_foods_restaurant` ON (restaurant_id) - 查询餐厅的所有菜品
+- `idx_foods_account` ON (account_id) - 查询用户上传的菜品
+- `idx_foods_category` ON (restaurant_id, category) - 按分类查询菜品
+- `idx_foods_likes` ON (restaurant_id, likes_count DESC) - 按热度排序
 
 ## 建表语句（PostgreSQL）
 
@@ -467,15 +494,40 @@ CREATE TABLE restaurant (
   location        geography(Point, 4326)  NOT NULL,
   gcj_lng         double precision        NOT NULL,
   gcj_lat         double precision        NOT NULL,
-  mall_id         bigint,
+  hub_id         bigint,
+  poi             text                    UNIQUE,
   created_at      timestamptz             NOT NULL DEFAULT now(),
   updated_at      timestamptz             NOT NULL DEFAULT now()
 );
 
+CREATE UNIQUE INDEX idx_restaurant_poi ON restaurant (poi) WHERE poi IS NOT NULL;
 CREATE INDEX idx_restaurant_location ON restaurant USING GIST (location);
-CREATE INDEX idx_restaurant_mall ON restaurant (mall_id);
+CREATE INDEX idx_restaurant_hub ON restaurant (hub_id);
 
 CREATE TRIGGER update_restaurant_updated_at BEFORE UPDATE ON restaurant
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE foods (
+  id              bigserial PRIMARY KEY,
+  account_id      bigint          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  restaurant_id   bigint          NOT NULL REFERENCES restaurant(id) ON DELETE CASCADE,
+  name            varchar(64)     NOT NULL,
+  description     text,
+  price           numeric(8,2),
+  category        varchar(32) CHECK (category IN ('staple','drink','snack','dessert','soup','hot_pot','grill','cold_dish','side_dish','other')),
+  picture_url     text[],
+  likes_count     int             NOT NULL DEFAULT 0,
+  created_at      timestamptz     NOT NULL DEFAULT now(),
+  updated_at      timestamptz     NOT NULL DEFAULT now(),
+  UNIQUE(restaurant_id, name)
+);
+
+CREATE INDEX idx_foods_restaurant ON foods (restaurant_id);
+CREATE INDEX idx_foods_account    ON foods (account_id);
+CREATE INDEX idx_foods_category   ON foods (restaurant_id, category);
+CREATE INDEX idx_foods_likes      ON foods (restaurant_id, likes_count DESC);
+
+CREATE TRIGGER update_foods_updated_at BEFORE UPDATE ON foods
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================

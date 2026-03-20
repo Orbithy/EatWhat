@@ -3,9 +3,9 @@ package you.v50to.eatwhat.data.dto;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import you.v50to.eatwhat.data.enums.UploadBiz;
 
 @Data
 public class PresignUploadReqDTO {
@@ -21,6 +21,6 @@ public class PresignUploadReqDTO {
     @Min(value = 1, message = "文件大小必须大于0")
     private Long fileSize;
 
-    @Pattern(regexp = "^(activity|avatar)$", message = "biz仅支持activity或avatar")
-    private String biz = "activity";
+    @NotNull(message = "biz不能为空")
+    private UploadBiz biz = UploadBiz.ACTIVITY;
 }

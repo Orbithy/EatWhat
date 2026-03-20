@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import you.v50to.eatwhat.config.S3StorageProperties;
 import you.v50to.eatwhat.data.enums.BizCode;
+import you.v50to.eatwhat.data.enums.UploadBiz;
 import you.v50to.eatwhat.exception.BizException;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -74,11 +75,10 @@ public class S3CompatibleStorageService implements ObjectStorageService {
     }
 
     @Override
-    public PresignedUpload presignPut(Long userId, String biz, String fileName, String contentType, Long fileSize) {
+    public PresignedUpload presignPut(Long userId, UploadBiz biz, String fileName, String contentType, Long fileSize) {
         validateUpload(contentType, fileSize);
 
-        String normalizedBiz = normalizeBiz(biz);
-        String key = buildObjectKey(normalizedBiz, userId, fileName);
+        String key = buildObjectKey(biz.getValue(), userId, fileName);
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(properties.getBucket())
@@ -174,16 +174,6 @@ public class S3CompatibleStorageService implements ObjectStorageService {
             return true;
         }
         return prefixes.stream().anyMatch(key::startsWith);
-    }
-
-    private String normalizeBiz(String biz) {
-        if (!StringUtils.hasText(biz)) {
-            return "activity";
-        }
-        if ("activity".equals(biz) || "avatar".equals(biz)) {
-            return biz;
-        }
-        throw new BizException(BizCode.PARAM_INVALID, "biz仅支持activity或avatar");
     }
 
     private String buildObjectKey(String biz, Long userId, String fileName) {

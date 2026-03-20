@@ -1,6 +1,7 @@
 package you.v50to.eatwhat.data.enums;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
@@ -26,6 +27,14 @@ public enum FoodCategory {
     FoodCategory(String value, String label) {
         this.value = value;
         this.label = label;
+    }
+
+    @JsonCreator
+    public static FoodCategory fromValue(String value) {
+        for (FoodCategory c : values()) {
+            if (c.value.equals(value)) return c;
+        }
+        throw new IllegalArgumentException("未知的菜品分类: " + value);
     }
 }
 

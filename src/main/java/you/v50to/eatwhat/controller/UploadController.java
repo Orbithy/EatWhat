@@ -11,6 +11,7 @@ import you.v50to.eatwhat.data.dto.PresignBatchUploadRespDTO;
 import you.v50to.eatwhat.data.dto.PresignUploadReqDTO;
 import you.v50to.eatwhat.data.dto.PresignUploadRespDTO;
 import you.v50to.eatwhat.data.enums.BizCode;
+import you.v50to.eatwhat.data.enums.UploadBiz;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.exception.BizException;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
@@ -36,9 +37,7 @@ public class UploadController {
     @PostMapping("/presign")
     public Result<PresignUploadRespDTO> presign(@Valid @RequestBody PresignUploadReqDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
-        if ("activity".equals(dto.getBiz()) && !StpUtil.hasRole("verified")) {
-            throw new BizException(BizCode.STATE_NOT_ALLOWED, "上传活动照片需要完成身份认证");
-        }
+        checkBizPermission(dto.getBiz());
         ObjectStorageService.PresignedUpload presigned = objectStorageService.presignPut(
                 userId,
                 dto.getBiz(),
@@ -55,9 +54,7 @@ public class UploadController {
             throw new BizException(BizCode.PARAM_INVALID, "文件列表不能为空");
         }
         Long userId = StpUtil.getLoginIdAsLong();
-        if ("activity".equals(dto.getBiz()) && !StpUtil.hasRole("verified")) {
-            throw new BizException(BizCode.STATE_NOT_ALLOWED, "上传活动照片需要完成身份认证");
-        }
+        checkBizPermission(dto.getBiz());
         List<PresignUploadRespDTO> files = dto.getFiles().stream()
                 .map(file -> {
                     ObjectStorageService.PresignedUpload presigned = objectStorageService.presignPut(
@@ -70,5 +67,11 @@ public class UploadController {
                 })
                 .toList();
         return Result.ok(new PresignBatchUploadRespDTO(files));
+    }
+
+    private void checkBizPermission(UploadBiz biz) {
+        if (biz != null && biz.isRequireVerified() && !StpUtil.hasRole("verified")) {
+            throw new BizException(BizCode.STATE_NOT_ALLOWED, "该上传类型需要完成身份认证");
+        }
     }
 }

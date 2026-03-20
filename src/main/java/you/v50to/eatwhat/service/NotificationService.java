@@ -31,7 +31,7 @@ public class NotificationService {
         signActorAvatar(items);
         Long totalItems = notificationMapper.countByAccountId(accountId);
 
-        return Result.ok(PageResult.of(items, page, pageSize, totalItems));
+        return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems));
     }
 
     public Result<Long> countUnread() {

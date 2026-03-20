@@ -2,8 +2,10 @@ package you.v50to.eatwhat.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.stereotype.Service;
 import you.v50to.eatwhat.data.dto.CreateFoodDTO;
+import you.v50to.eatwhat.data.dto.EditFoodDTO;
 import you.v50to.eatwhat.data.dto.FoodVO;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.po.Food;
@@ -14,7 +16,6 @@ import you.v50to.eatwhat.mapper.FoodMapper;
 import you.v50to.eatwhat.mapper.RestaurantMapper;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
 
-import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -87,5 +88,57 @@ public class FoodService {
         if (arr == null) return Collections.emptyList();
         return Arrays.asList(arr);
     }
-}
 
+    public Result<Void> deleteFood(Long id) {
+        int rows = foodMapper.deleteById(id);
+        if (rows <= 0) {
+            return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
+        }
+
+        return Result.ok();
+    }
+
+    public Result<FoodVO> getFoodDetail(Long id) {
+        Food food = foodMapper.selectById(id);
+        if (food == null) {
+            return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
+        }
+        return Result.ok(toVO(food));
+    }
+
+    public Result<Void> editFood(Long id, @Valid EditFoodDTO dto) {
+        Food food = foodMapper.selectById(id);
+        if (food == null) {
+            return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
+        }
+
+        if (dto.getRestaurantId() != null) {
+            Restaurant restaurant = restaurantMapper.selectById(dto.getRestaurantId());
+            if (restaurant == null) {
+                return Result.fail(BizCode.RESTAURANT_NOT_FOUND, "餐厅不存在");
+            }
+            food.setRestaurantId(dto.getRestaurantId());
+        }
+        if (dto.getName() != null) {
+            food.setName(dto.getName());
+        }
+        if (dto.getDescription() != null) {
+            food.setDescription(dto.getDescription());
+        }
+        if (dto.getPrice() != null) {
+            food.setPrice(dto.getPrice());
+        }
+        if (dto.getCategory() != null) {
+            food.setCategory(dto.getCategory());
+        }
+        if (dto.getPictureUrl() != null) {
+            food.setPictureUrl(dto.getPictureUrl().toArray(new String[0]));
+        }
+
+        int rows = foodMapper.updateById(food);
+        if (rows <= 0) {
+            return Result.fail(BizCode.OP_FAILED, "操作失败");
+        }
+        return Result.ok();
+    }
+}

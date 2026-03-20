@@ -38,6 +38,8 @@ public enum BizCode {
     CITY_PROVINCE_MISMATCH(40005, "城市与省份不匹配"),
     PROVINCE_NOT_FOUND(40006, "省份不存在"),
     CITY_NOT_FOUND(40007, "城市不存在"),
+    FOOD_NOT_FOUND(40008, "菜品不存在"),
+    RESTAURANT_NOT_FOUND(40009, "餐厅不存在"),
 
     // 5xxxx 外部依赖错误
     THIRD_PARTY_UNAVAILABLE(50001, "第三方服务不可用"),

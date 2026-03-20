@@ -37,4 +37,3 @@ public enum FoodCategory {
         throw new IllegalArgumentException("未知的菜品分类: " + value);
     }
 }
-

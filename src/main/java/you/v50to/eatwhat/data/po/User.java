@@ -21,6 +21,7 @@ public class User {
 
     private String passwordHash;
     private String avatar;
+    private String role;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

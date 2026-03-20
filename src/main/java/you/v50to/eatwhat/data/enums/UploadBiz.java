@@ -30,4 +30,3 @@ public enum UploadBiz {
         throw new IllegalArgumentException("不支持的 biz 类型: " + value);
     }
 }
-

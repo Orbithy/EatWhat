@@ -139,6 +139,9 @@ public class AuthService {
         if (passwordEncoder.matches(password, user.getPasswordHash())) {
             StpUtil.login(user.getId(), device);
             SaTokenInfo tokenInfo = StpUtil.getTokenInfo();
+            if (StpUtil.hasRole("admin")) {
+                tokenInfo.setTag("admin");
+            }
             return Result.ok(tokenInfo);
         } else {
             return Result.fail(BizCode.PASSWORD_ERROR);

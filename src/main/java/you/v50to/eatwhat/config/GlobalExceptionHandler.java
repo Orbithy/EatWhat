@@ -25,8 +25,8 @@ public class GlobalExceptionHandler {
         return Result.fail(BizCode.NOT_LOGIN);
     }
 
-    @ExceptionHandler(cn.dev33.satoken.exception.DisableLoginException.class)
-    public Result<Void> disableLoginExceptionHandler() {
+    @ExceptionHandler(cn.dev33.satoken.exception.DisableServiceException.class)
+    public Result<Void> disableServiceExceptionHandler() {
         return Result.fail(BizCode.USER_DISABLED);
     }
 

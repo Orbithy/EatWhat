@@ -98,4 +98,19 @@ public interface UserMapper extends BaseMapper<User> {
             ORDER BY u.id ASC
             """)
     IPage<UserInfoDTO> selectUserPage(IPage<UserInfoDTO> page);
+
+    @Select("SELECT COUNT(*) FROM users")
+    Long countTotal();
+
+    @Select("SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE")
+    Long countToday();
+
+    @Select("""
+            SELECT CASE WHEN COUNT(*) = 0 THEN 0
+                        ELSE ROUND(COUNT(v.id) * 1.0 / COUNT(u.id), 4)
+                   END
+            FROM users u
+            LEFT JOIN verifications v ON v.account_id = u.id AND v.verified = true
+            """)
+    Double selectVerifiedRate();
 }

@@ -26,4 +26,10 @@ public interface RestaurantMapper extends BaseMapper<Restaurant> {
                                         @Param("radius") Double radius,
                                         IPage<Restaurant> page);
 
+    @Select("SELECT COUNT(*) FROM restaurant")
+    Long countTotal();
+
+    @Select("SELECT COUNT(*) FROM restaurant WHERE created_at >= CURRENT_DATE")
+    Long countToday();
+
 }

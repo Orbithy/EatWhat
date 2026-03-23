@@ -1,5 +1,6 @@
 package you.v50to.eatwhat.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
@@ -7,16 +8,15 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import you.v50to.eatwhat.data.dto.RestaurantDTO;
 import you.v50to.eatwhat.data.dto.SearchRestaurantsDTO;
+import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.po.Restaurant;
 import you.v50to.eatwhat.data.vo.PageResult;
-import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.RestaurantMapper;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
 import you.v50to.eatwhat.utils.CoordinateTransformUtil;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static you.v50to.eatwhat.utils.GeoUtil.gcjToWgsPoint;
@@ -97,5 +97,17 @@ public class RestaurantService {
             return new String[0];
         }
         return list.toArray(new String[0]);
+    }
+
+    public Result<PageResult<Restaurant>> listRestaurants(String keyword, Integer page, Integer pageSize) {
+        page = validPage(page);
+        pageSize = validPageSize(pageSize);
+
+        LambdaQueryWrapper<Restaurant> wrapper = new LambdaQueryWrapper<Restaurant>()
+                .like(keyword != null && !keyword.isBlank(), Restaurant::getName, keyword)
+                .orderByDesc(Restaurant::getCreatedAt);
+        IPage<Restaurant> result = restaurantMapper.selectPage(new Page<>(page, pageSize), wrapper);
+        result.getRecords().forEach(this::signPictureUrls);
+        return Result.ok(PageResult.of(result.getRecords(), result.getCurrent(), result.getSize(), result.getTotal()));
     }
 }

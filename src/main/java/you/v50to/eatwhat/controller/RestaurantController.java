@@ -51,4 +51,13 @@ public class RestaurantController {
         return restaurantService.deleteRestaurant(id);
     }
 
+    @GetMapping("/list")
+    @SaCheckRole("admin")
+    public Result<PageResult<Restaurant>> listRestaurants(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return restaurantService.listRestaurants(keyword, page, pageSize);
+    }
+
 }

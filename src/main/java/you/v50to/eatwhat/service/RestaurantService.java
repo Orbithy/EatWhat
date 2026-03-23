@@ -1,5 +1,6 @@
 package you.v50to.eatwhat.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -30,6 +31,8 @@ public class RestaurantService {
     private RestaurantMapper restaurantMapper;
     @Resource
     private ObjectStorageService objectStorageService;
+    @Resource
+    private BrowseHistoryService browseHistoryService;
 
     public Result<PageResult<Restaurant>> searchRestaurants(SearchRestaurantsDTO dto) {
         int page = validPage(dto.getPage());
@@ -58,6 +61,7 @@ public class RestaurantService {
     public Result<Restaurant> getRestaurantDetail(Long id) {
         Restaurant restaurant = restaurantMapper.selectById(id);
         if (restaurant != null) {
+            browseHistoryService.recordBrowse(StpUtil.getLoginIdAsLong(), "restaurant", id);
             signPictureUrls(restaurant);
         }
         return Result.ok(restaurant);

@@ -277,6 +277,27 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 - `idx_foods_category` ON (restaurant_id, category) - 按分类查询菜品
 - `idx_foods_likes` ON (restaurant_id, likes_count DESC) - 按热度排序
 
+## BrowseHistory（浏览历史）
+
+| 字段          | 类型                                   | 含义                 |
+|-------------|--------------------------------------|--------------------|
+| id          | bigserial PRIMARY KEY                | 浏览历史ID             |
+| account_id  | bigint NOT NULL REFERENCES users(id) | 浏览用户ID             |
+| target_type | varchar(32) NOT NULL                 | 浏览目标类型             |
+| target_id   | bigint NOT NULL                      | 浏览目标ID             |
+| created_at  | timestamptz NOT NULL DEFAULT now()   | 本次浏览被计入的时间         |
+
+**约束：**
+- `CHECK(target_type IN ('restaurant', 'food'))` - 仅支持餐厅和菜品浏览历史
+
+**说明：**
+- 对同一用户、同一目标设置 5 分钟去抖窗口；窗口内重复请求不重复计入
+- 列表查询按 `created_at DESC, id DESC` 排序，保证同秒数据顺序稳定
+
+**索引：**
+- `idx_browse_history_list` ON (account_id, target_type, created_at DESC, id DESC) - 浏览历史分页查询
+- `idx_browse_history_dedup` ON (account_id, target_type, target_id, created_at DESC) - 5 分钟去抖判断
+
 ## Likes（普通点赞表）
 
 | 字段          | 类型                                   | 含义          |
@@ -560,6 +581,20 @@ CREATE INDEX idx_foods_likes      ON foods (restaurant_id, likes_count DESC);
 
 CREATE TRIGGER update_foods_updated_at BEFORE UPDATE ON foods
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE browse_history (
+  id            bigserial PRIMARY KEY,
+  account_id    bigint      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_type   varchar(32) NOT NULL CHECK (target_type IN ('restaurant', 'food')),
+  target_id     bigint      NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_browse_history_list
+  ON browse_history (account_id, target_type, created_at DESC, id DESC);
+
+CREATE INDEX idx_browse_history_dedup
+  ON browse_history (account_id, target_type, target_id, created_at DESC);
 
 CREATE TABLE likes (
   id            bigserial PRIMARY KEY,

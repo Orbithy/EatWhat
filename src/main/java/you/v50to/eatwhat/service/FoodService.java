@@ -32,6 +32,8 @@ public class FoodService {
     private RestaurantMapper restaurantMapper;
     @Resource
     private ObjectStorageService objectStorageService;
+    @Resource
+    private BrowseHistoryService browseHistoryService;
 
     public Result<Void> uploadFood(CreateFoodDTO dto) {
         // 校验餐厅是否存在
@@ -103,6 +105,7 @@ public class FoodService {
         if (food == null) {
             return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
         }
+        browseHistoryService.recordBrowse(StpUtil.getLoginIdAsLong(), "food", id);
         return Result.ok(toVO(food));
     }
 

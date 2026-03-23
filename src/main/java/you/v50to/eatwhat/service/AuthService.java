@@ -169,13 +169,28 @@ public class AuthService {
             JwtUtil.User user = userOpt.get();
             String casID = user.casId();
             String name = user.name();
-            Verification v = new Verification();
-            v.setAccountId(userId);
-            v.setMethod("sso");
-            v.setVerified(true);
-            v.setRealName(name);
-            v.setStudentId(casID);
-            verificationMapper.insert(v);
+            Verification v = verificationMapper.selectOne(
+                    new LambdaQueryWrapper<Verification>()
+                            .eq(Verification::getAccountId, userId)
+            );
+
+            if (v == null) {
+                v = new Verification();
+                v.setAccountId(userId);
+                v.setMethod("sso");
+                v.setVerified(true);
+                v.setRealName(name);
+                v.setStudentId(casID);
+                verificationMapper.insert(v);
+            } else {
+                v.setMethod("sso");
+                v.setVerified(true);
+                v.setRealName(name);
+                v.setStudentId(casID);
+                v.setVerifiedEmail(null);
+                verificationMapper.updateById(v);
+            }
+
             String redisKey = "auth:" + userId;
             redis.opsForValue().set(redisKey, "sso", StpInterfaceImpl.TTL);
             response.sendRedirect("/home");

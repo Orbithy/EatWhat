@@ -23,6 +23,8 @@ public class User {
     private String avatar;
     private String role;
     private Boolean banned;
+    private String banReason;
+    private OffsetDateTime bannedAt;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

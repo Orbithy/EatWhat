@@ -14,8 +14,10 @@ import you.v50to.eatwhat.data.dto.*;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.enums.Scene;
 import you.v50to.eatwhat.data.po.*;
+import you.v50to.eatwhat.data.vo.AccountStatusVO;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
+import you.v50to.eatwhat.data.vo.UserListItemVO;
 import you.v50to.eatwhat.mapper.ContactMapper;
 import you.v50to.eatwhat.mapper.FollowMapper;
 import you.v50to.eatwhat.mapper.PrivacyMapper;
@@ -24,7 +26,12 @@ import you.v50to.eatwhat.mapper.UserMapper;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
 import you.v50to.eatwhat.utils.LocationValidationUtil;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static you.v50to.eatwhat.utils.ValidUtil.validPage;
 import static you.v50to.eatwhat.utils.ValidUtil.validPageSize;
@@ -370,21 +377,53 @@ public class UserService {
         return Result.ok();
     }
 
-    public Result<PageResult<UserInfoDTO>> listUsers(Integer page, Integer pageSize) {
+    public Result<PageResult<UserListItemVO>> listUsers(Integer page, Integer pageSize) {
         page = validPage(page);
         pageSize = validPageSize(pageSize);
 
         IPage<UserInfoDTO> result = userMapper.selectUserPage(new Page<>(page, pageSize));
-        result.getRecords().forEach(u -> u.setAvatar(objectStorageService.signGetUrl(u.getAvatar())));
+        List<UserListItemVO> vos = result.getRecords().stream().map(u -> {
+            UserListItemVO vo = new UserListItemVO();
+            vo.setId(u.getId());
+            vo.setUserName(u.getUserName());
+            vo.setAvatar(objectStorageService.signGetUrl(u.getAvatar()));
+            vo.setRole(u.getRole());
+            vo.setEmail(u.getEmail());
+            vo.setPhone(u.getPhone());
+            vo.setVerified(u.getVerified());
+            vo.setMethod(u.getMethod());
+            vo.setStudentId(u.getStudentId());
+            vo.setRealName(u.getRealName());
+            vo.setVerifiedEmail(u.getVerifiedEmail());
+            vo.setCreatedAt(u.getCreatedAt());
+            vo.setUpdatedAt(u.getUpdatedAt());
 
-        return Result.ok(PageResult.of(result.getRecords(), result.getCurrent(), result.getSize(), result.getTotal()));
+            AccountStatusVO status = new AccountStatusVO();
+            if (Boolean.TRUE.equals(u.getBanned())) {
+                status.setAccountStatus("BANNED");
+                status.setBanReason(u.getBanReason());
+                status.setBanExpireAt(null);
+                if (u.getBannedAt() != null) {
+                    String iso = OffsetDateTime.ofInstant(
+                            Instant.ofEpochMilli(u.getBannedAt()), ZoneOffset.ofHours(8)
+                    ).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+                    status.setBannedAt(iso);
+                }
+            } else {
+                status.setAccountStatus("NORMAL");
+            }
+            vo.setAccountStatus(status);
+            return vo;
+        }).collect(Collectors.toList());
+
+        return Result.ok(PageResult.of(vos, result.getCurrent(), result.getSize(), result.getTotal()));
     }
 
     /**
      * 封禁用户（永久）
      * 不能封禁管理员
      */
-    public Result<Void> banUser(Long userId) {
+    public Result<Void> banUser(Long userId, BanUserDTO dto) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             return Result.fail(BizCode.USER_NOT_FOUND);
@@ -395,10 +434,12 @@ public class UserService {
         // 踢出所有已登录 token，并永久封禁（-1 表示永久）
         StpUtil.logout(userId);
         StpUtil.disable(userId, -1);
-        // 同步更新数据库封禁状态
+        // 同步更新数据库封禁状态、封禁原因和封禁时间
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, userId)
-                .set(User::getBanned, true));
+                .set(User::getBanned, true)
+                .set(User::getBanReason, dto.getReason())
+                .set(User::getBannedAt, OffsetDateTime.now()));
         return Result.ok();
     }
 
@@ -411,10 +452,12 @@ public class UserService {
             return Result.fail(BizCode.USER_NOT_FOUND);
         }
         StpUtil.untieDisable(userId);
-        // 同步更新数据库封禁状态
+        // 同步更新数据库封禁状态，清空封禁原因和封禁时间
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, userId)
-                .set(User::getBanned, false));
+                .set(User::getBanned, false)
+                .set(User::getBanReason, null)
+                .set(User::getBannedAt, null));
         return Result.ok();
     }
 }

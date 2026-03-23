@@ -23,6 +23,8 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 | avatar        | text                               | 头像 URL |
 | role          | varchar(16) NOT NULL DEFAULT 'user' | 角色（user/admin） |
 | banned        | boolean NOT NULL DEFAULT false     | 是否被封禁  |
+| ban_reason    | text                               | 封禁原因   |
+| banned_at     | timestamptz                        | 封禁时间   |
 | created_at    | timestamptz NOT NULL DEFAULT now() | 创建时间   |
 | updated_at    | timestamptz NOT NULL DEFAULT now() | 更新时间   |
 
@@ -311,6 +313,8 @@ CREATE TABLE users (
   avatar        text,
   role          varchar(16) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
   banned        boolean     NOT NULL DEFAULT false,
+  ban_reason    text,
+  banned_at     timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );

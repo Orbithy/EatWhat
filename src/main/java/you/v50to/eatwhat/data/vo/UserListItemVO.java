@@ -1,21 +1,13 @@
-package you.v50to.eatwhat.data.dto;
+package you.v50to.eatwhat.data.vo;
 
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
-/**
- * 用户自己的信息
- */
 @Data
-@NoArgsConstructor
-public class UserInfoDTO {
+public class UserListItemVO {
     private Long id;
     private String userName;
     private String avatar;
     private String role;
-    private Boolean banned;
-    private String banReason;
-    private Long bannedAt;
     private String email;
     private String phone;
     private Boolean verified;
@@ -25,4 +17,6 @@ public class UserInfoDTO {
     private String verifiedEmail;
     private Long createdAt;
     private Long updatedAt;
+    private AccountStatusVO accountStatus;
 }
+

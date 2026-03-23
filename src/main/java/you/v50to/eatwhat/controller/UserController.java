@@ -11,6 +11,7 @@ import you.v50to.eatwhat.data.dto.*;
 import you.v50to.eatwhat.data.enums.Scene;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
+import you.v50to.eatwhat.data.vo.UserListItemVO;
 import you.v50to.eatwhat.service.UserService;
 import you.v50to.eatwhat.utils.IpUtil;
 
@@ -141,7 +142,7 @@ public class UserController {
      */
     @SaCheckRole("admin")
     @GetMapping("/list")
-    public Result<PageResult<UserInfoDTO>> listUsers(
+    public Result<PageResult<UserListItemVO>> listUsers(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
         return userService.listUsers(page, pageSize);
@@ -152,8 +153,8 @@ public class UserController {
      */
     @SaCheckRole("admin")
     @PostMapping("/ban/{userId}")
-    public Result<Void> banUser(@PathVariable Long userId) {
-        return userService.banUser(userId);
+    public Result<Void> banUser(@PathVariable Long userId, @Valid @RequestBody BanUserDTO dto) {
+        return userService.banUser(userId, dto);
     }
 
     /**

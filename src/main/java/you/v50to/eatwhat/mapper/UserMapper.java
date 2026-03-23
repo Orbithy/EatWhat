@@ -81,6 +81,8 @@ public interface UserMapper extends BaseMapper<User> {
                 u.avatar,
                 u.role,
                 u.banned,
+                u.ban_reason AS banReason,
+                CAST(EXTRACT(EPOCH FROM u.banned_at) * 1000 AS bigint) AS bannedAt,
                 CAST(EXTRACT(EPOCH FROM u.created_at) * 1000 AS bigint) AS createdAt,
                 CAST(EXTRACT(EPOCH FROM u.updated_at) * 1000 AS bigint) AS updatedAt,
                 c.email,

@@ -23,8 +23,23 @@ public interface FoodMapper extends BaseMapper<Food> {
                                     @Param("offset") int offset,
                                     @Param("limit") int limit);
 
+    @Select("""
+            SELECT f.*, u.nick_name AS uploaderName
+            FROM foods f
+            JOIN users u ON u.id = f.account_id
+            WHERE f.account_id = #{accountId}
+            ORDER BY f.created_at DESC
+            LIMIT #{limit} OFFSET #{offset}
+            """)
+    List<Food> selectByAccountId(@Param("accountId") Long accountId,
+                                 @Param("offset") int offset,
+                                 @Param("limit") int limit);
+
     @Select("SELECT COUNT(*) FROM foods WHERE restaurant_id = #{restaurantId}")
     Long countByRestaurantId(@Param("restaurantId") Long restaurantId);
+
+    @Select("SELECT COUNT(*) FROM foods WHERE account_id = #{accountId}")
+    Long countByAccountId(@Param("accountId") Long accountId);
 
     @Select("SELECT COUNT(*) FROM foods")
     Long countTotal();
@@ -32,4 +47,3 @@ public interface FoodMapper extends BaseMapper<Food> {
     @Select("SELECT COUNT(*) FROM foods WHERE created_at >= CURRENT_DATE")
     Long countToday();
 }
-

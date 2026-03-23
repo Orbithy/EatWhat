@@ -2,6 +2,7 @@ package you.v50to.eatwhat.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.stp.StpUtil;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -49,6 +50,17 @@ public class FoodController {
         return foodService.getFoodDetail(id);
     }
 
+    /**
+     * 获取自己上传的菜品
+     */
+    @SaCheckRole("verified")
+    @GetMapping("/my")
+    public Result<PageResult<FoodVO>> getMyFood(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        return foodService.getMyFood(userId, page, pageSize);
+    }
 // ==================== Admin API ====================
 
     @SaCheckRole("admin")

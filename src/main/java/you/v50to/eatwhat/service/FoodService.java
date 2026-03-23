@@ -144,4 +144,16 @@ public class FoodService {
         }
         return Result.ok();
     }
+
+    public Result<PageResult<FoodVO>> getMyFood(Long userId, Integer page, Integer pageSize) {
+        page = validPage(page);
+        pageSize = validPageSize(pageSize);
+
+        int offset = (page - 1) * pageSize;
+        List<Food> foods = foodMapper.selectByAccountId(userId, offset, pageSize);
+        Long total = foodMapper.countByAccountId(userId);
+
+        List<FoodVO> items = foods.stream().map(this::toVO).toList();
+        return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), total));
+    }
 }

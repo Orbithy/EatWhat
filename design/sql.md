@@ -21,6 +21,8 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 | nick_name     | varchar(32) NOT NULL UNIQUE        | 用户名    |
 | password_hash | text NOT NULL                      | 密码哈希   |
 | avatar        | text                               | 头像 URL |
+| role          | varchar(16) NOT NULL DEFAULT 'user' | 角色（user/admin） |
+| banned        | boolean NOT NULL DEFAULT false     | 是否被封禁  |
 | created_at    | timestamptz NOT NULL DEFAULT now() | 创建时间   |
 | updated_at    | timestamptz NOT NULL DEFAULT now() | 更新时间   |
 
@@ -224,19 +226,20 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 
 ## Restaurant（餐厅）
 
-| 字段         | 类型                                 | 含义               |
-|------------|------------------------------------|------------------|
-| id         | bigserial PRIMARY KEY              | 餐厅ID             |
-| name       | text NOT NULL                      | 餐厅名称             |
-| address    | text                               | 地址描述             |
-| city_id    | int REFERENCES cities(id)          | 城市ID             |
-| location   | geography(Point, 4326) NOT NULL    | 坐标（WGS84，用于空间计算） |
-| gcj_lng    | double precision NOT NULL          | GCJ02 经度（直接返回前端） |
-| gcj_lat    | double precision NOT NULL          | GCJ02 纬度（直接返回前端） |
-| hub_id     | bigint                             | 所属商场ID           |
-| poi        | text UNIQUE                        | POI 信息           |
-| created_at | timestamptz NOT NULL DEFAULT now() | 创建时间             |
-| updated_at | timestamptz NOT NULL DEFAULT now() | 更新时间             |
+| 字段          | 类型                                 | 含义               |
+|-------------|-------------------------------------|------------------|
+| id          | bigserial PRIMARY KEY               | 餐厅ID             |
+| name        | text NOT NULL                       | 餐厅名称             |
+| address     | text                                | 地址描述             |
+| city_id     | int REFERENCES cities(id)           | 城市ID             |
+| location    | geography(Point, 4326) NOT NULL     | 坐标（WGS84，用于空间计算） |
+| gcj_lng     | double precision NOT NULL           | GCJ02 经度（直接返回前端） |
+| gcj_lat     | double precision NOT NULL           | GCJ02 纬度（直接返回前端） |
+| hub_id      | bigint                              | 所属商场ID           |
+| poi         | text UNIQUE                         | POI 信息           |
+| picture_url | text[]                              | 餐厅图片 key 列表      |
+| created_at  | timestamptz NOT NULL DEFAULT now()  | 创建时间             |
+| updated_at  | timestamptz NOT NULL DEFAULT now()  | 更新时间             |
 
 **说明：**
 - `location` 存储 WGS84 坐标，用于服务端空间计算（距离、范围查询等）
@@ -306,6 +309,8 @@ CREATE TABLE users (
   nick_name     varchar(32) NOT NULL UNIQUE,
   password_hash text        NOT NULL,
   avatar        text,
+  role          varchar(16) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  banned        boolean     NOT NULL DEFAULT false,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
@@ -515,8 +520,9 @@ CREATE TABLE restaurant (
   location        geography(Point, 4326)  NOT NULL,
   gcj_lng         double precision        NOT NULL,
   gcj_lat         double precision        NOT NULL,
-  hub_id         bigint,
+  hub_id          bigint,
   poi             text                    UNIQUE,
+  picture_url     text[],
   created_at      timestamptz             NOT NULL DEFAULT now(),
   updated_at      timestamptz             NOT NULL DEFAULT now()
 );

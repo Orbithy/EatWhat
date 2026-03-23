@@ -12,7 +12,12 @@ import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.RestaurantMapper;
+import you.v50to.eatwhat.service.storage.ObjectStorageService;
 import you.v50to.eatwhat.utils.CoordinateTransformUtil;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import static you.v50to.eatwhat.utils.GeoUtil.gcjToWgsPoint;
 import static you.v50to.eatwhat.utils.ValidUtil.validPage;
@@ -23,6 +28,8 @@ public class RestaurantService {
 
     @Resource
     private RestaurantMapper restaurantMapper;
+    @Resource
+    private ObjectStorageService objectStorageService;
 
     public Result<PageResult<Restaurant>> searchRestaurants(SearchRestaurantsDTO dto) {
         int page = validPage(dto.getPage());
@@ -35,20 +42,24 @@ public class RestaurantService {
                 wgs[0], wgs[1],
                 dto.getRadius(),
                 new Page<>(page, pageSize));
+        restaurants.getRecords().forEach(this::signPictureUrls);
         return Result.ok(PageResult.of(restaurants.getRecords(), restaurants.getCurrent(), restaurants.getSize(), restaurants.getTotal()));
     }
 
     public Result<Void> addRestaurant(RestaurantDTO dto) {
         Restaurant restaurant = new Restaurant();
         BeanUtils.copyProperties(dto, restaurant);
-
-        restaurant.setLocation(gcjToWgsPoint(dto.getGcjLng(),dto.getGcjLat()));
+        restaurant.setLocation(gcjToWgsPoint(dto.getGcjLng(), dto.getGcjLat()));
+        restaurant.setPictureUrl(toArray(dto.getPictureUrl()));
         restaurantMapper.insert(restaurant);
         return Result.ok();
     }
 
     public Result<Restaurant> getRestaurantDetail(Long id) {
         Restaurant restaurant = restaurantMapper.selectById(id);
+        if (restaurant != null) {
+            signPictureUrls(restaurant);
+        }
         return Result.ok(restaurant);
     }
 
@@ -59,6 +70,7 @@ public class RestaurantService {
         }
         BeanUtils.copyProperties(dto, restaurant);
         restaurant.setLocation(gcjToWgsPoint(dto.getGcjLng(), dto.getGcjLat()));
+        restaurant.setPictureUrl(toArray(dto.getPictureUrl()));
         restaurantMapper.updateById(restaurant);
         return Result.ok();
     }
@@ -70,5 +82,20 @@ public class RestaurantService {
         }
         restaurantMapper.deleteById(id);
         return Result.ok();
+    }
+
+    private void signPictureUrls(Restaurant restaurant) {
+        if (restaurant.getPictureUrl() == null || restaurant.getPictureUrl().length == 0) {
+            return;
+        }
+        List<String> signed = objectStorageService.signGetUrls(Arrays.asList(restaurant.getPictureUrl()));
+        restaurant.setPictureUrl(signed.toArray(new String[0]));
+    }
+
+    private String[] toArray(List<String> list) {
+        if (list == null) {
+            return new String[0];
+        }
+        return list.toArray(new String[0]);
     }
 }

@@ -86,6 +86,7 @@ app:
         - image/webp
         - image/gif
       allowed-read-prefixes:
+        - restaurants/
         - activity/
         - avatar/
         - foods/

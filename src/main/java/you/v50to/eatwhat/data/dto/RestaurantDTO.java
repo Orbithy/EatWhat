@@ -1,10 +1,9 @@
 package you.v50to.eatwhat.data.dto;
 
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class RestaurantDTO {
@@ -22,5 +21,7 @@ public class RestaurantDTO {
     private Double gcjLat;
     private Long hubId;
     private String POI;
+    @Size(max = 9, message = "餐厅图片最多9张")
+    private List<@NotBlank(message = "图片链接不能为空") @Pattern(regexp = "^restaurants/.+", message = "图片必须是有效的 restaurants key") String> pictureUrl;
 }
 

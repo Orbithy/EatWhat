@@ -9,7 +9,8 @@ public enum UploadBiz {
 
     ACTIVITY("activity", true),   // 需要 verified 角色
     AVATAR("avatar", false),      // 仅需登录
-    FOODS("foods", false);        // 仅需登录
+    FOODS("foods", true),
+    RESTAURANTS("restaurants", true);
 
     @JsonValue
     private final String value;

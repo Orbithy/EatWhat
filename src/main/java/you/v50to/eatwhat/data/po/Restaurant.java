@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.locationtech.jts.geom.Point;
+import you.v50to.eatwhat.utils.PointTypeHandler;
 import you.v50to.eatwhat.utils.StringArrayTypeHandler;
 
 import java.time.OffsetDateTime;
@@ -20,10 +21,12 @@ public class Restaurant {
     private String name;
     private String address;
     private Integer cityId;
+    @TableField(typeHandler = PointTypeHandler.class)
     private Point location;
     private Double gcjLng;
     private Double gcjLat;
     private Long hubId;
+    @TableField("poi")
     private String POI;
     @TableField(value = "picture_url", typeHandler = StringArrayTypeHandler.class)
     private String[] pictureUrl;

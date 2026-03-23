@@ -11,6 +11,7 @@ public class RestaurantDTO {
     private String name;
     @NotBlank(message = "地址不能为空")
     private String address;
+    private Integer cityId;
     @NotNull(message = "gcjLng不能为空")
     @DecimalMin(value = "72.004", message = "gcjLng超出范围")
     @DecimalMax(value = "137.8347", message = "gcjLng超出范围")
@@ -24,4 +25,3 @@ public class RestaurantDTO {
     @Size(max = 9, message = "餐厅图片最多9张")
     private List<@NotBlank(message = "图片链接不能为空") @Pattern(regexp = "^restaurants/.+", message = "图片必须是有效的 restaurants key") String> pictureUrl;
 }
-

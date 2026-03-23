@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import tools.jackson.databind.annotation.JsonSerialize;
+import you.v50to.eatwhat.config.JacksonConfig;
 
 import java.time.OffsetDateTime;
 
@@ -17,6 +19,7 @@ public class Hub {
     private String center;
     private Double gcjLng;
     private Double gcjLat;
+    @JsonSerialize(using = JacksonConfig.GeometrySerializer.class)
     private MultiPolygon boundary;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

@@ -7,10 +7,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.locationtech.jts.geom.Point;
+import tools.jackson.databind.annotation.JsonSerialize;
+import you.v50to.eatwhat.config.JacksonConfig;
 import you.v50to.eatwhat.utils.PointTypeHandler;
 import you.v50to.eatwhat.utils.StringArrayTypeHandler;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
-import java.time.OffsetDateTime;
+
 
 @Data
 @NoArgsConstructor
@@ -21,6 +24,7 @@ public class Restaurant {
     private String name;
     private String address;
     private Integer cityId;
+    @JsonSerialize(using = JacksonConfig.GeometrySerializer.class)
     @TableField(typeHandler = PointTypeHandler.class)
     private Point location;
     private Double gcjLng;
@@ -30,6 +34,8 @@ public class Restaurant {
     private String POI;
     @TableField(value = "picture_url", typeHandler = StringArrayTypeHandler.class)
     private String[] pictureUrl;
-    private OffsetDateTime createdAt;
-    private OffsetDateTime updatedAt;
+    @TableField(value = "created_at", typeHandler = TimestampTypeHandler.class)
+    private Long createdAt;
+    @TableField(value = "updated_at", typeHandler = TimestampTypeHandler.class)
+    private Long updatedAt;
 }

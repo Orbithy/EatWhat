@@ -23,6 +23,7 @@ public class FoodVO {
     private List<String> pictureUrl;
     private List<FoodSystemTagVO> systemTags;
     private List<FoodTagSummaryVO> myCustomTags;
+    private Boolean isFavorite;
     private Integer likesCount;
     private Long createdAt;
     private Long updatedAt;

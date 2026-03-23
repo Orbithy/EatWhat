@@ -254,6 +254,8 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 
 ## Foods
 
+支持用户收藏菜品并查看“我的收藏”；菜品相关接口可附带当前登录用户视角的 `isFavorite` 状态。
+
 | 字段              | 类型                                        | 含义              |
 |-----------------|-------------------------------------------|-----------------|
 | id              | bigserial PRIMARY KEY                     | 菜品ID            |
@@ -276,6 +278,24 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 - `idx_foods_account` ON (account_id) - 查询用户上传的菜品
 - `idx_foods_category` ON (restaurant_id, category) - 按分类查询菜品
 - `idx_foods_likes` ON (restaurant_id, likes_count DESC) - 按热度排序
+
+## FoodFavorites
+
+用于记录用户收藏的餐厅菜品关系，支持“收藏 / 取消收藏 / 我的收藏”。
+
+| 字段          | 类型                                   | 含义     |
+|-------------|--------------------------------------|--------|
+| id          | bigserial PRIMARY KEY                | 收藏ID   |
+| account_id  | bigint NOT NULL REFERENCES users(id) | 用户ID   |
+| food_id     | bigint NOT NULL REFERENCES foods(id) | 菜品ID   |
+| created_at  | timestamptz NOT NULL DEFAULT now()   | 收藏时间 |
+
+**约束：**
+- `UNIQUE(account_id, food_id)` - 同一用户对同一菜品只能收藏一次
+
+**索引：**
+- `idx_food_favorites_account_created` ON (account_id, created_at DESC, id DESC) - 查询我的收藏分页
+- `idx_food_favorites_food` ON (food_id) - 批量判断菜品收藏状态
 
 ## BrowseHistory（浏览历史）
 

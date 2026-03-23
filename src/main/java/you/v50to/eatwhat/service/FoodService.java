@@ -1,6 +1,7 @@
 package you.v50to.eatwhat.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Service;
@@ -9,16 +10,20 @@ import you.v50to.eatwhat.data.dto.EditFoodDTO;
 import you.v50to.eatwhat.data.dto.FoodVO;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.po.Food;
+import you.v50to.eatwhat.data.po.FoodFavorite;
 import you.v50to.eatwhat.data.po.Restaurant;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
+import you.v50to.eatwhat.mapper.FoodFavoriteMapper;
 import you.v50to.eatwhat.mapper.FoodMapper;
 import you.v50to.eatwhat.mapper.RestaurantMapper;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static you.v50to.eatwhat.utils.ValidUtil.validPage;
 import static you.v50to.eatwhat.utils.ValidUtil.validPageSize;
@@ -36,6 +41,8 @@ public class FoodService {
     private BrowseHistoryService browseHistoryService;
     @Resource
     private FoodTagService foodTagService;
+    @Resource
+    private FoodFavoriteMapper foodFavoriteMapper;
 
     public Result<Void> uploadFood(CreateFoodDTO dto) {
         // 校验餐厅是否存在
@@ -45,7 +52,7 @@ public class FoodService {
         }
 
         Food food = new Food();
-        food.setAccountId(StpUtil.getLoginIdAsLong());
+        food.setAccountId(currentUserId());
         food.setRestaurantId(dto.getRestaurantId());
         food.setName(dto.getName());
         food.setDescription(dto.getDescription());
@@ -69,7 +76,7 @@ public class FoodService {
         pageSize = validPageSize(pageSize);
 
         int offset = (page - 1) * pageSize;
-        Long currentUserId = StpUtil.getLoginIdAsLong();
+        Long currentUserId = currentUserId();
         List<String> normalizedCustomTagNames = foodTagService.normalizeTagNames(myCustomTagNames);
 
         boolean hasFilters = (systemTagIds != null && !systemTagIds.isEmpty())
@@ -96,7 +103,7 @@ public class FoodService {
                 : foodMapper.countByRestaurantId(restaurantId);
 
         List<FoodVO> items = foods.stream().map(this::toVO).toList();
-        foodTagService.fillFoodTagViews(items, currentUserId);
+        fillFoodViews(items, currentUserId);
         return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), total));
     }
 
@@ -136,9 +143,10 @@ public class FoodService {
         if (food == null) {
             return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
         }
-        browseHistoryService.recordBrowse(StpUtil.getLoginIdAsLong(), "food", id);
+        Long currentUserId = currentUserId();
+        browseHistoryService.recordBrowse(currentUserId, "food", id);
         FoodVO vo = toVO(food);
-        foodTagService.fillFoodTagViews(List.of(vo), StpUtil.getLoginIdAsLong());
+        fillFoodViews(List.of(vo), currentUserId);
         return Result.ok(vo);
     }
 
@@ -187,7 +195,73 @@ public class FoodService {
         Long total = foodMapper.countByAccountId(userId);
 
         List<FoodVO> items = foods.stream().map(this::toVO).toList();
-        foodTagService.fillFoodTagViews(items, userId);
+        fillFoodViews(items, userId);
         return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), total));
+    }
+
+    public Result<Void> favoriteFood(Long foodId) {
+        if (foodMapper.selectById(foodId) == null) {
+            return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
+        }
+
+        Long userId = currentUserId();
+        FoodFavorite favorite = foodFavoriteMapper.selectOne(new LambdaQueryWrapper<FoodFavorite>()
+                .eq(FoodFavorite::getAccountId, userId)
+                .eq(FoodFavorite::getFoodId, foodId));
+        if (favorite != null) {
+            return Result.ok();
+        }
+
+        FoodFavorite record = new FoodFavorite();
+        record.setAccountId(userId);
+        record.setFoodId(foodId);
+        foodFavoriteMapper.insert(record);
+        return Result.ok();
+    }
+
+    public Result<Void> unfavoriteFood(Long foodId) {
+        if (foodMapper.selectById(foodId) == null) {
+            return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
+        }
+
+        Long userId = currentUserId();
+        foodFavoriteMapper.delete(new LambdaQueryWrapper<FoodFavorite>()
+                .eq(FoodFavorite::getAccountId, userId)
+                .eq(FoodFavorite::getFoodId, foodId));
+        return Result.ok();
+    }
+
+    public Result<PageResult<FoodVO>> getMyFavoriteFoods(Long userId, Integer page, Integer pageSize) {
+        page = validPage(page);
+        pageSize = validPageSize(pageSize);
+
+        int offset = (page - 1) * pageSize;
+        List<Food> foods = foodFavoriteMapper.selectFavoriteFoodsByAccountId(userId, offset, pageSize);
+        Long total = foodFavoriteMapper.countFavoritesByAccountId(userId);
+
+        List<FoodVO> items = foods.stream().map(this::toVO).toList();
+        fillFoodViews(items, userId);
+        return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), total));
+    }
+
+    private void fillFoodViews(List<FoodVO> items, Long currentUserId) {
+        foodTagService.fillFoodTagViews(items, currentUserId);
+        fillFavoriteState(items, currentUserId);
+    }
+
+    private void fillFavoriteState(List<FoodVO> items, Long currentUserId) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        List<Long> foodIds = items.stream().map(FoodVO::getId).toList();
+        List<Long> favoriteIds = foodFavoriteMapper.selectFavoriteFoodIds(currentUserId, foodIds);
+        Set<Long> favoriteFoodIds = favoriteIds == null ? Collections.emptySet() : new HashSet<>(favoriteIds);
+        for (FoodVO item : items) {
+            item.setIsFavorite(favoriteFoodIds.contains(item.getId()));
+        }
+    }
+
+    protected Long currentUserId() {
+        return StpUtil.getLoginIdAsLong();
     }
 }

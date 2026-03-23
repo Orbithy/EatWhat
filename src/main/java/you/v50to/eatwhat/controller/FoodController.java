@@ -63,6 +63,18 @@ public class FoodController {
     }
 
     @SaCheckRole("verified")
+    @PostMapping("/{id}/favorite")
+    public Result<Void> favoriteFood(@PathVariable Long id) {
+        return foodService.favoriteFood(id);
+    }
+
+    @SaCheckRole("verified")
+    @PostMapping("/{id}/unfavorite")
+    public Result<Void> unfavoriteFood(@PathVariable Long id) {
+        return foodService.unfavoriteFood(id);
+    }
+
+    @SaCheckRole("verified")
     @GetMapping("/tags/system")
     public Result<List<FoodTagSummaryVO>> listSystemTags() {
         return foodTagService.listSystemTags();
@@ -102,6 +114,15 @@ public class FoodController {
             @RequestParam(defaultValue = "20") Integer pageSize) {
         Long userId = StpUtil.getLoginIdAsLong();
         return foodService.getMyFood(userId, page, pageSize);
+    }
+
+    @SaCheckRole("verified")
+    @GetMapping("/favorites")
+    public Result<PageResult<FoodVO>> getMyFavoriteFoods(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        return foodService.getMyFavoriteFoods(userId, page, pageSize);
     }
 // ==================== Admin API ====================
 

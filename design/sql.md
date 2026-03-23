@@ -272,6 +272,27 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 - `idx_foods_category` ON (restaurant_id, category) - 按分类查询菜品
 - `idx_foods_likes` ON (restaurant_id, likes_count DESC) - 按热度排序
 
+## Likes（普通点赞表）
+
+| 字段          | 类型                                   | 含义          |
+|-------------|--------------------------------------|-------------|
+| id          | bigserial PRIMARY KEY                | 点赞ID        |
+| account_id  | bigint NOT NULL REFERENCES users(id) | 账号ID        |
+| target_type | varchar(32) NOT NULL                 | 目标类型        |
+| target_id   | bigint NOT NULL                      | 目标ID        |
+| deleted_at  | timestamptz                          | 软删除时间（取消点赞） |
+| created_at  | timestamptz NOT NULL DEFAULT now()   | 创建时间        |
+| updated_at  | timestamptz NOT NULL DEFAULT now()   | 更新时间        |
+
+**约束：**
+- `UNIQUE(account_id, target_type, target_id)` - 防止重复点赞
+- `CHECK(target_type IN ('food'))` - 限制目标类型
+
+**索引：**
+- `idx_likes_unique` UNIQUE ON (account_id, target_type, target_id) - 唯一约束索引
+- `idx_likes_target` ON (target_type, target_id) - 查询某目标的所有点赞
+- `idx_likes_account` ON (account_id, created_at DESC) - 查询用户的点赞历史
+
 ## 建表语句（PostgreSQL）
 
 ```postgresql
@@ -530,10 +551,28 @@ CREATE INDEX idx_foods_likes      ON foods (restaurant_id, likes_count DESC);
 CREATE TRIGGER update_foods_updated_at BEFORE UPDATE ON foods
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TABLE likes (
+  id            bigserial PRIMARY KEY,
+  account_id    bigint      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_type   varchar(32) NOT NULL CHECK(target_type IN ('food')),
+  target_id     bigint      NOT NULL,
+  deleted_at    timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(account_id, target_type, target_id)
+);
+
+-- 索引
+CREATE INDEX idx_likes_target  ON likes(target_type, target_id);
+CREATE INDEX idx_likes_account ON likes(account_id, created_at DESC);
+
+CREATE TRIGGER update_likes_updated_at BEFORE UPDATE ON likes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================
--- 触发器：自动维护点赞数缓存
+-- 触发器：自动维护点赞数缓存（activity_likes）
 -- ============================================
-CREATE OR REPLACE FUNCTION update_likes_count()
+CREATE OR REPLACE FUNCTION update_activity_likes_count()
 RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' AND NEW.deleted_at IS NULL THEN
@@ -577,8 +616,47 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_likes_count_trigger
+CREATE TRIGGER update_activity_likes_count_trigger
   AFTER INSERT OR UPDATE OR DELETE ON activity_likes
+  FOR EACH ROW EXECUTE FUNCTION update_activity_likes_count();
+
+-- ============================================
+-- 触发器：自动维护点赞数缓存（likes）
+-- ============================================
+CREATE OR REPLACE FUNCTION update_likes_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' AND NEW.deleted_at IS NULL THEN
+    IF NEW.target_type = 'food' THEN
+      UPDATE foods SET likes_count = likes_count + 1 WHERE id = NEW.target_id;
+    END IF;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
+      IF NEW.target_type = 'food' THEN
+        UPDATE foods SET likes_count = likes_count - 1 WHERE id = NEW.target_id;
+      END IF;
+    ELSIF OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL THEN
+      IF NEW.target_type = 'food' THEN
+        UPDATE foods SET likes_count = likes_count + 1 WHERE id = NEW.target_id;
+      END IF;
+    END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.deleted_at IS NULL THEN
+      IF OLD.target_type = 'food' THEN
+        UPDATE foods SET likes_count = likes_count - 1 WHERE id = OLD.target_id;
+      END IF;
+    END IF;
+  END IF;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  ELSE
+    RETURN NEW;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_likes_count_trigger
+  AFTER INSERT OR UPDATE OR DELETE ON likes
   FOR EACH ROW EXECUTE FUNCTION update_likes_count();
 
 -- ============================================

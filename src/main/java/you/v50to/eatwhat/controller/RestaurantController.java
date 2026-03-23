@@ -37,4 +37,18 @@ public class RestaurantController {
         return restaurantService.getRestaurantDetail(id);
     }
 
+// ==================== Admin API ====================
+
+    @SaCheckRole("admin")
+    @PutMapping("/edit/{id}")
+    public Result<Void> editRestaurant(@PathVariable Long id, @Valid @RequestBody RestaurantDTO dto) {
+        return restaurantService.editRestaurant(id, dto);
+    }
+
+    @SaCheckRole("admin")
+    @DeleteMapping("/delete/{id}")
+    public Result<Void> deleteRestaurant(@PathVariable Long id) {
+        return restaurantService.deleteRestaurant(id);
+    }
+
 }

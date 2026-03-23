@@ -9,6 +9,7 @@ import you.v50to.eatwhat.data.dto.RestaurantDTO;
 import you.v50to.eatwhat.data.dto.SearchRestaurantsDTO;
 import you.v50to.eatwhat.data.po.Restaurant;
 import you.v50to.eatwhat.data.vo.PageResult;
+import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.RestaurantMapper;
 import you.v50to.eatwhat.utils.CoordinateTransformUtil;
@@ -49,5 +50,25 @@ public class RestaurantService {
     public Result<Restaurant> getRestaurantDetail(Long id) {
         Restaurant restaurant = restaurantMapper.selectById(id);
         return Result.ok(restaurant);
+    }
+
+    public Result<Void> editRestaurant(Long id, RestaurantDTO dto) {
+        Restaurant restaurant = restaurantMapper.selectById(id);
+        if (restaurant == null) {
+            return Result.fail(BizCode.RESTAURANT_NOT_FOUND);
+        }
+        BeanUtils.copyProperties(dto, restaurant);
+        restaurant.setLocation(gcjToWgsPoint(dto.getGcjLng(), dto.getGcjLat()));
+        restaurantMapper.updateById(restaurant);
+        return Result.ok();
+    }
+
+    public Result<Void> deleteRestaurant(Long id) {
+        Restaurant restaurant = restaurantMapper.selectById(id);
+        if (restaurant == null) {
+            return Result.fail(BizCode.RESTAURANT_NOT_FOUND);
+        }
+        restaurantMapper.deleteById(id);
+        return Result.ok();
     }
 }

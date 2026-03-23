@@ -22,6 +22,7 @@ public class User {
     private String passwordHash;
     private String avatar;
     private String role;
+    private Boolean banned;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

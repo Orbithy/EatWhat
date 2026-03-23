@@ -80,6 +80,7 @@ public interface UserMapper extends BaseMapper<User> {
                 u.nick_name AS userName,
                 u.avatar,
                 u.role,
+                u.banned,
                 CAST(EXTRACT(EPOCH FROM u.created_at) * 1000 AS bigint) AS createdAt,
                 CAST(EXTRACT(EPOCH FROM u.updated_at) * 1000 AS bigint) AS updatedAt,
                 c.email,

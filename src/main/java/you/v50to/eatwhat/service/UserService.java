@@ -395,6 +395,10 @@ public class UserService {
         // 踢出所有已登录 token，并永久封禁（-1 表示永久）
         StpUtil.logout(userId);
         StpUtil.disable(userId, -1);
+        // 同步更新数据库封禁状态
+        userMapper.update(null, new LambdaUpdateWrapper<User>()
+                .eq(User::getId, userId)
+                .set(User::getBanned, true));
         return Result.ok();
     }
 
@@ -407,6 +411,10 @@ public class UserService {
             return Result.fail(BizCode.USER_NOT_FOUND);
         }
         StpUtil.untieDisable(userId);
+        // 同步更新数据库封禁状态
+        userMapper.update(null, new LambdaUpdateWrapper<User>()
+                .eq(User::getId, userId)
+                .set(User::getBanned, false));
         return Result.ok();
     }
 }

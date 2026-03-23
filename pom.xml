@@ -117,7 +117,7 @@
         <dependency>
             <groupId>cn.dev33</groupId>
             <artifactId>sa-token-spring-aop</artifactId>
-            <version>1.44.0</version>
+            <version>1.45.0</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -127,7 +127,7 @@
         <dependency>
             <groupId>cn.dev33</groupId>
             <artifactId>sa-token-redis-template</artifactId>
-            <version>1.44.0</version>
+            <version>1.45.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>

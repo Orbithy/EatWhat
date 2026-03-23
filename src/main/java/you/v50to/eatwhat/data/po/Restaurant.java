@@ -20,6 +20,7 @@ public class Restaurant {
     private Long id;
     private String name;
     private String address;
+    private Integer cityId;
     @TableField(typeHandler = PointTypeHandler.class)
     private Point location;
     private Double gcjLng;

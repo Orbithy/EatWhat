@@ -3,6 +3,8 @@ package you.v50to.eatwhat.data.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import you.v50to.eatwhat.data.enums.FoodCategory;
+import you.v50to.eatwhat.data.vo.FoodSystemTagVO;
+import you.v50to.eatwhat.data.vo.FoodTagSummaryVO;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -19,8 +21,9 @@ public class FoodVO {
     private BigDecimal price;
     private FoodCategory category;
     private List<String> pictureUrl;
+    private List<FoodSystemTagVO> systemTags;
+    private List<FoodTagSummaryVO> myCustomTags;
     private Integer likesCount;
     private Long createdAt;
     private Long updatedAt;
 }
-

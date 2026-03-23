@@ -34,6 +34,8 @@ public class FoodService {
     private ObjectStorageService objectStorageService;
     @Resource
     private BrowseHistoryService browseHistoryService;
+    @Resource
+    private FoodTagService foodTagService;
 
     public Result<Void> uploadFood(CreateFoodDTO dto) {
         // 校验餐厅是否存在
@@ -57,15 +59,44 @@ public class FoodService {
         return Result.ok();
     }
 
-    public Result<PageResult<FoodVO>> listByRestaurant(Long restaurantId, Integer page, Integer pageSize) {
+    public Result<PageResult<FoodVO>> listByRestaurant(Long restaurantId,
+                                                       Integer page,
+                                                       Integer pageSize,
+                                                       List<Long> systemTagIds,
+                                                       List<Long> myCustomTagIds,
+                                                       List<String> myCustomTagNames) {
         page = validPage(page);
         pageSize = validPageSize(pageSize);
 
         int offset = (page - 1) * pageSize;
-        List<Food> foods = foodMapper.selectByRestaurantId(restaurantId, offset, pageSize);
-        Long total = foodMapper.countByRestaurantId(restaurantId);
+        Long currentUserId = StpUtil.getLoginIdAsLong();
+        List<String> normalizedCustomTagNames = foodTagService.normalizeTagNames(myCustomTagNames);
+
+        boolean hasFilters = (systemTagIds != null && !systemTagIds.isEmpty())
+                || (myCustomTagIds != null && !myCustomTagIds.isEmpty())
+                || !normalizedCustomTagNames.isEmpty();
+
+        List<Food> foods = hasFilters
+                ? foodMapper.selectByRestaurantIdWithFilters(
+                restaurantId,
+                offset,
+                pageSize,
+                currentUserId,
+                systemTagIds,
+                myCustomTagIds,
+                normalizedCustomTagNames)
+                : foodMapper.selectByRestaurantId(restaurantId, offset, pageSize);
+        Long total = hasFilters
+                ? foodMapper.countByRestaurantIdWithFilters(
+                restaurantId,
+                currentUserId,
+                systemTagIds,
+                myCustomTagIds,
+                normalizedCustomTagNames)
+                : foodMapper.countByRestaurantId(restaurantId);
 
         List<FoodVO> items = foods.stream().map(this::toVO).toList();
+        foodTagService.fillFoodTagViews(items, currentUserId);
         return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), total));
     }
 
@@ -106,7 +137,9 @@ public class FoodService {
             return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
         }
         browseHistoryService.recordBrowse(StpUtil.getLoginIdAsLong(), "food", id);
-        return Result.ok(toVO(food));
+        FoodVO vo = toVO(food);
+        foodTagService.fillFoodTagViews(List.of(vo), StpUtil.getLoginIdAsLong());
+        return Result.ok(vo);
     }
 
     public Result<Void> editFood(Long id, @Valid EditFoodDTO dto) {
@@ -154,6 +187,7 @@ public class FoodService {
         Long total = foodMapper.countByAccountId(userId);
 
         List<FoodVO> items = foods.stream().map(this::toVO).toList();
+        foodTagService.fillFoodTagViews(items, userId);
         return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), total));
     }
 }

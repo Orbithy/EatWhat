@@ -54,6 +54,7 @@ public class RestaurantService {
         BeanUtils.copyProperties(dto, restaurant);
         restaurant.setLocation(gcjToWgsPoint(dto.getGcjLng(), dto.getGcjLat()));
         restaurant.setPictureUrl(toArray(dto.getPictureUrl()));
+        restaurant.setAccountId(StpUtil.getLoginIdAsLong());
         restaurantMapper.insert(restaurant);
         return Result.ok();
     }

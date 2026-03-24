@@ -229,19 +229,20 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 ## Restaurant（餐厅）
 
 | 字段          | 类型                                 | 含义               |
-|-------------|-------------------------------------|------------------|
-| id          | bigserial PRIMARY KEY               | 餐厅ID             |
-| name        | text NOT NULL                       | 餐厅名称             |
-| address     | text                                | 地址描述             |
-| city_id     | int REFERENCES cities(id)           | 城市ID             |
-| location    | geography(Point, 4326) NOT NULL     | 坐标（WGS84，用于空间计算） |
-| gcj_lng     | double precision NOT NULL           | GCJ02 经度（直接返回前端） |
-| gcj_lat     | double precision NOT NULL           | GCJ02 纬度（直接返回前端） |
-| hub_id      | bigint                              | 所属商场ID           |
-| poi         | text UNIQUE                         | POI 信息           |
-| picture_url | text[]                              | 餐厅图片 key 列表      |
-| created_at  | timestamptz NOT NULL DEFAULT now()  | 创建时间             |
-| updated_at  | timestamptz NOT NULL DEFAULT now()  | 更新时间             |
+|-------------|------------------------------------|------------------|
+| id          | bigserial PRIMARY KEY              | 餐厅ID             |
+| account_id  | bigint REFERENCES users(id)        | 上传者ID            |
+| name        | text NOT NULL                      | 餐厅名称             |
+| address     | text                               | 地址描述             |
+| city_id     | int REFERENCES cities(id)          | 城市ID             |
+| location    | geography(Point, 4326) NOT NULL    | 坐标（WGS84，用于空间计算） |
+| gcj_lng     | double precision NOT NULL          | GCJ02 经度（直接返回前端） |
+| gcj_lat     | double precision NOT NULL          | GCJ02 纬度（直接返回前端） |
+| hub_id      | bigint                             | 所属商场ID           |
+| poi         | text UNIQUE                        | POI 信息           |
+| picture_url | text[]                             | 餐厅图片 key 列表      |
+| created_at  | timestamptz NOT NULL DEFAULT now() | 创建时间             |
+| updated_at  | timestamptz NOT NULL DEFAULT now() | 更新时间             |
 
 **说明：**
 - `location` 存储 WGS84 坐标，用于服务端空间计算（距离、范围查询等）
@@ -251,6 +252,7 @@ GRANT ALL PRIVILEGES ON DATABASE eatwhat TO eatwhat_user;
 - `idx_restaurant_poi` UNIQUE ON (poi) WHERE poi IS NOT NULL - POI 唯一索引
 - `idx_restaurant_location` USING GIST ON (location) - 空间索引（WGS84）
 - `idx_restaurant_hub` ON (hub_id) - 按商场查询
+- `idx_restaurant_account` ON (account_id) - 按上传者查询
 
 ## Foods
 
@@ -560,6 +562,7 @@ CREATE TRIGGER update_hub_updated_at BEFORE UPDATE ON hub
 
 CREATE TABLE restaurant (
   id              bigserial PRIMARY KEY,
+  account_id      bigint                  REFERENCES users(id) ON DELETE SET NULL,
   name            text                    NOT NULL,
   address         text,
   location        geography(Point, 4326)  NOT NULL,
@@ -575,6 +578,7 @@ CREATE TABLE restaurant (
 CREATE UNIQUE INDEX idx_restaurant_poi ON restaurant (poi) WHERE poi IS NOT NULL;
 CREATE INDEX idx_restaurant_location ON restaurant USING GIST (location);
 CREATE INDEX idx_restaurant_hub ON restaurant (hub_id);
+CREATE INDEX idx_restaurant_account ON restaurant (account_id);
 
 CREATE TRIGGER update_restaurant_updated_at BEFORE UPDATE ON restaurant
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

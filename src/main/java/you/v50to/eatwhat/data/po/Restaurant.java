@@ -21,6 +21,7 @@ import you.v50to.eatwhat.utils.TimestampTypeHandler;
 public class Restaurant {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long accountId;
     private String name;
     private String address;
     private Integer cityId;

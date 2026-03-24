@@ -30,4 +30,12 @@ public class OtherUserInfoDTO {
      * 是否已关注对方
      */
     private Boolean isFollowingHim;
+    /**
+     * 上传店铺数量
+     */
+    private Long uploadedRestaurantsCount;
+    /**
+     * 上传菜品数量
+     */
+    private Long uploadedFoodsCount;
 }

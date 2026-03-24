@@ -73,7 +73,9 @@ public interface UserMapper extends BaseMapper<User> {
                 COALESCE((SELECT follower FROM privacy WHERE account_id = #{userId}), true) AS fansVisible,
                 COALESCE((SELECT following FROM privacy WHERE account_id = #{userId}), true) AS followingsVisible,
                 EXISTS(SELECT 1 FROM follow WHERE account_id = #{userId} AND target_id = #{currentUserId}) AS isFollowingMe,
-                EXISTS(SELECT 1 FROM follow WHERE account_id = #{currentUserId} AND target_id = #{userId}) AS isFollowingHim
+                EXISTS(SELECT 1 FROM follow WHERE account_id = #{currentUserId} AND target_id = #{userId}) AS isFollowingHim,
+                (SELECT COUNT(*) FROM restaurant WHERE account_id = #{userId}) AS uploadedRestaurantsCount,
+                (SELECT COUNT(*) FROM foods WHERE account_id = #{userId}) AS uploadedFoodsCount
             FROM users u
             WHERE u.id = #{userId}
             LIMIT 1

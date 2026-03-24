@@ -17,6 +17,7 @@ public interface RestaurantMapper extends BaseMapper<Restaurant> {
 
     @Results(id = "restaurantResultMap", value = {
             @Result(property = "POI", column = "poi"),
+            @Result(property = "accountId", column = "account_id"),
             @Result(property = "location", column = "location", typeHandler = PointTypeHandler.class),
             @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),

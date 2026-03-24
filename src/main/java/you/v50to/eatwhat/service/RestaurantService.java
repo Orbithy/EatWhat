@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import you.v50to.eatwhat.data.dto.EditRestaurantDTO;
 import you.v50to.eatwhat.data.dto.RestaurantDTO;
 import you.v50to.eatwhat.data.dto.SearchRestaurantsDTO;
 import you.v50to.eatwhat.data.enums.BizCode;
@@ -68,14 +69,34 @@ public class RestaurantService {
         return Result.ok(restaurant);
     }
 
-    public Result<Void> editRestaurant(Long id, RestaurantDTO dto) {
+    public Result<Void> editRestaurant(Long id, EditRestaurantDTO dto) {
         Restaurant restaurant = restaurantMapper.selectById(id);
         if (restaurant == null) {
             return Result.fail(BizCode.RESTAURANT_NOT_FOUND);
         }
-        BeanUtils.copyProperties(dto, restaurant);
-        restaurant.setLocation(gcjToWgsPoint(dto.getGcjLng(), dto.getGcjLat()));
-        restaurant.setPictureUrl(toArray(dto.getPictureUrl()));
+        if (dto.getName() != null) {
+            restaurant.setName(dto.getName());
+        }
+        if (dto.getAddress() != null) {
+            restaurant.setAddress(dto.getAddress());
+        }
+        if (dto.getCityId() != null) {
+            restaurant.setCityId(dto.getCityId());
+        }
+        if (dto.getHubId() != null) {
+            restaurant.setHubId(dto.getHubId());
+        }
+        if (dto.getPOI() != null) {
+            restaurant.setPOI(dto.getPOI());
+        }
+        if (dto.getPictureUrl() != null) {
+            restaurant.setPictureUrl(toArray(dto.getPictureUrl()));
+        }
+        if (dto.getGcjLng() != null && dto.getGcjLat() != null) {
+            restaurant.setGcjLng(dto.getGcjLng());
+            restaurant.setGcjLat(dto.getGcjLat());
+            restaurant.setLocation(gcjToWgsPoint(dto.getGcjLng(), dto.getGcjLat()));
+        }
         restaurantMapper.updateById(restaurant);
         return Result.ok();
     }

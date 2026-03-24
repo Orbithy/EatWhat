@@ -5,6 +5,7 @@ import cn.dev33.satoken.annotation.SaCheckRole;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+import you.v50to.eatwhat.data.dto.EditRestaurantDTO;
 import you.v50to.eatwhat.data.dto.RestaurantDTO;
 import you.v50to.eatwhat.data.dto.SearchRestaurantsDTO;
 import you.v50to.eatwhat.data.po.Restaurant;
@@ -41,7 +42,7 @@ public class RestaurantController {
 
     @SaCheckRole("admin")
     @PutMapping("/edit/{id}")
-    public Result<Void> editRestaurant(@PathVariable Long id, @Valid @RequestBody RestaurantDTO dto) {
+    public Result<Void> editRestaurant(@PathVariable Long id, @Valid @RequestBody EditRestaurantDTO dto) {
         return restaurantService.editRestaurant(id, dto);
     }
 

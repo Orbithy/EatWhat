@@ -12,8 +12,10 @@ import you.v50to.eatwhat.data.dto.AddSystemFoodTagsDTO;
 import you.v50to.eatwhat.data.dto.CreateFoodDTO;
 import you.v50to.eatwhat.data.dto.EditFoodDTO;
 import you.v50to.eatwhat.data.dto.FoodVO;
+import you.v50to.eatwhat.data.dto.RenameCustomTagDTO;
 import you.v50to.eatwhat.data.vo.FoodTagSummaryVO;
 import you.v50to.eatwhat.data.vo.FoodTagViewVO;
+import you.v50to.eatwhat.data.vo.MyCustomTagVO;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.FoodService;
@@ -78,6 +80,27 @@ public class FoodController {
     @GetMapping("/tags/system")
     public Result<List<FoodTagSummaryVO>> listSystemTags() {
         return foodTagService.listSystemTags();
+    }
+
+    @SaCheckRole("verified")
+    @GetMapping("/tags/my")
+    public Result<PageResult<MyCustomTagVO>> listMyCustomTags(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return foodTagService.listMyCustomTags(StpUtil.getLoginIdAsLong(), page, pageSize);
+    }
+
+    @SaCheckRole("verified")
+    @PutMapping("/tags/my/{tagId}")
+    public Result<Void> renameMyCustomTag(@PathVariable Long tagId,
+                                          @Valid @RequestBody RenameCustomTagDTO dto) {
+        return foodTagService.renameMyCustomTag(tagId, StpUtil.getLoginIdAsLong(), dto);
+    }
+
+    @SaCheckRole("verified")
+    @DeleteMapping("/tags/my/{tagId}")
+    public Result<Void> deleteMyCustomTag(@PathVariable Long tagId) {
+        return foodTagService.deleteMyCustomTag(tagId, StpUtil.getLoginIdAsLong());
     }
 
     @SaCheckRole("verified")

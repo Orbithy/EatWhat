@@ -81,4 +81,12 @@ public interface FoodTaggingMapper extends BaseMapper<FoodTagging> {
             """)
     List<FoodCustomTagRow> selectMyCustomTagsByFoodIds(@Param("foodIds") List<Long> foodIds,
                                                        @Param("accountId") Long accountId);
+
+    @Delete("""
+            DELETE FROM food_taggings
+            WHERE tag_id = #{tagId}
+              AND account_id = #{accountId}
+            """)
+    int deleteAllTaggingsByTagId(@Param("tagId") Long tagId,
+                                 @Param("accountId") Long accountId);
 }

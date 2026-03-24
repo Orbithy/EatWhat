@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.*;
 import you.v50to.eatwhat.data.po.FoodTag;
 import you.v50to.eatwhat.data.vo.AdminFoodTagVO;
 import you.v50to.eatwhat.data.vo.FoodTagSummaryVO;
+import you.v50to.eatwhat.data.vo.MyCustomTagVO;
 import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 import java.util.List;
@@ -82,4 +83,29 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
             WHERE tag_type = 'system'
             """)
     Long countSystemTags();
+
+    @Select("""
+            SELECT
+              ft.id,
+              ft.name,
+              COUNT(ftg.id) AS usageCount
+            FROM food_tags ft
+            LEFT JOIN food_taggings ftg ON ftg.tag_id = ft.id AND ftg.account_id = #{ownerId}
+            WHERE ft.tag_type = 'custom'
+              AND ft.owner_id = #{ownerId}
+            GROUP BY ft.id, ft.name
+            ORDER BY ft.created_at DESC, ft.id DESC
+            LIMIT #{limit} OFFSET #{offset}
+            """)
+    List<MyCustomTagVO> selectCustomTagsByOwner(@Param("ownerId") Long ownerId,
+                                                @Param("offset") int offset,
+                                                @Param("limit") int limit);
+
+    @Select("""
+            SELECT COUNT(*)
+            FROM food_tags
+            WHERE tag_type = 'custom'
+              AND owner_id = #{ownerId}
+            """)
+    Long countCustomTagsByOwner(@Param("ownerId") Long ownerId);
 }

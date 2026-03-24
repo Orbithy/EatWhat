@@ -10,6 +10,7 @@ import you.v50to.eatwhat.data.dto.CreateSystemFoodTagDTO;
 import you.v50to.eatwhat.data.dto.FoodCustomTagRow;
 import you.v50to.eatwhat.data.dto.FoodSystemTagAggregateRow;
 import you.v50to.eatwhat.data.dto.FoodVO;
+import you.v50to.eatwhat.data.dto.RenameCustomTagDTO;
 import you.v50to.eatwhat.data.dto.UpdateSystemFoodTagDTO;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.po.Food;
@@ -19,6 +20,7 @@ import you.v50to.eatwhat.data.vo.AdminFoodTagVO;
 import you.v50to.eatwhat.data.vo.FoodSystemTagVO;
 import you.v50to.eatwhat.data.vo.FoodTagSummaryVO;
 import you.v50to.eatwhat.data.vo.FoodTagViewVO;
+import you.v50to.eatwhat.data.vo.MyCustomTagVO;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.FoodMapper;
@@ -174,6 +176,53 @@ public class FoodTagService {
             return Result.fail(BizCode.OP_FAILED, "系统标签不存在");
         }
         foodTagMapper.deleteById(id);
+        return Result.ok();
+    }
+
+    public Result<PageResult<MyCustomTagVO>> listMyCustomTags(Long accountId, Integer page, Integer pageSize) {
+        page = validPage(page);
+        pageSize = validPageSize(pageSize);
+        int offset = (page - 1) * pageSize;
+
+        List<MyCustomTagVO> items = foodTagMapper.selectCustomTagsByOwner(accountId, offset, pageSize);
+        Long total = foodTagMapper.countCustomTagsByOwner(accountId);
+        return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), total));
+    }
+
+    public Result<Void> renameMyCustomTag(Long tagId, Long accountId, RenameCustomTagDTO dto) {
+        FoodTag tag = foodTagMapper.selectOne(new LambdaQueryWrapper<FoodTag>()
+                .eq(FoodTag::getId, tagId)
+                .eq(FoodTag::getTagType, TAG_TYPE_CUSTOM)
+                .eq(FoodTag::getOwnerId, accountId));
+        if (tag == null) {
+            return Result.fail(BizCode.OP_FAILED, "标签不存在或不属于当前用户");
+        }
+
+        String normalized = normalizeTagName(dto.getName());
+        if (normalized.isEmpty()) {
+            return Result.fail(BizCode.PARAM_INVALID, "标签名称不能为空");
+        }
+
+        tag.setName(dto.getName().trim().replaceAll("\\s+", " "));
+        tag.setNormalizedName(normalized);
+        try {
+            foodTagMapper.updateById(tag);
+        } catch (DuplicateKeyException ex) {
+            return Result.fail(BizCode.OP_FAILED, "已存在同名标签");
+        }
+        return Result.ok();
+    }
+
+    public Result<Void> deleteMyCustomTag(Long tagId, Long accountId) {
+        FoodTag tag = foodTagMapper.selectOne(new LambdaQueryWrapper<FoodTag>()
+                .eq(FoodTag::getId, tagId)
+                .eq(FoodTag::getTagType, TAG_TYPE_CUSTOM)
+                .eq(FoodTag::getOwnerId, accountId));
+        if (tag == null) {
+            return Result.fail(BizCode.OP_FAILED, "标签不存在或不属于当前用户");
+        }
+        foodTaggingMapper.deleteAllTaggingsByTagId(tagId, accountId);
+        foodTagMapper.deleteById(tagId);
         return Result.ok();
     }
 

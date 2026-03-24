@@ -24,14 +24,22 @@ public interface RestaurantMapper extends BaseMapper<Restaurant> {
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
     })
     @Select("""
+            <script>
             SELECT *,
                    ST_Distance(location, ST_SetSRID(ST_MakePoint(#{wgsLng}, #{wgsLat}), 4326)::geography) AS distance
             FROM restaurant
-            WHERE (#{keyword} IS NULL OR name LIKE CONCAT('%', #{keyword}, '%'))
-              AND (#{radius} IS NULL OR ST_DWithin(location,
-                       ST_SetSRID(ST_MakePoint(#{wgsLng}, #{wgsLat}), 4326)::geography,
-                       #{radius}))
+            <where>
+                <if test="keyword != null and keyword != ''">
+                    name LIKE CONCAT('%', #{keyword}, '%')
+                </if>
+                <if test="radius != null">
+                    AND ST_DWithin(location,
+                    ST_SetSRID(ST_MakePoint(#{wgsLng}, #{wgsLat}), 4326)::geography,
+                    #{radius})
+                </if>
+            </where>
             ORDER BY distance ASC
+            </script>
             """)
     IPage<Restaurant> searchRestaurants(@Param("keyword") String keyword,
                                         @Param("wgsLng") double wgsLng,

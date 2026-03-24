@@ -7,8 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import you.v50to.eatwhat.utils.StringArrayTypeHandler;
-
-import java.time.OffsetDateTime;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 @Data
 @NoArgsConstructor
@@ -21,7 +20,10 @@ public class ActivityDinner {
     private String[] pictureUrl;
     private String description;
     private Integer likesCount;
-    private OffsetDateTime deletedAt;
-    private OffsetDateTime createdAt;
-    private OffsetDateTime updatedAt;
+    @TableField(value = "deleted_at", typeHandler = TimestampTypeHandler.class)
+    private Long deletedAt;
+    @TableField(value = "created_at", typeHandler = TimestampTypeHandler.class)
+    private Long createdAt;
+    @TableField(value = "updated_at", typeHandler = TimestampTypeHandler.class)
+    private Long updatedAt;
 }

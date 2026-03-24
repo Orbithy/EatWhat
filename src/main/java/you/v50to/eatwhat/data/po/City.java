@@ -1,17 +1,17 @@
 package you.v50to.eatwhat.data.po;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
-
-import java.time.OffsetDateTime;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 /**
  * 城市实体
  */
 @Data
-@TableName("cities")
+@TableName(value = "cities", autoResultMap = true)
 public class City {
     
     /**
@@ -33,6 +33,6 @@ public class City {
     /**
      * 创建时间
      */
-    private OffsetDateTime createdAt;
+    @TableField(value = "created_at", typeHandler = TimestampTypeHandler.class)
+    private Long createdAt;
 }
-

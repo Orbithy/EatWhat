@@ -8,9 +8,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import you.v50to.eatwhat.data.enums.FoodCategory;
 import you.v50to.eatwhat.utils.StringArrayTypeHandler;
-
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 @Data
 @NoArgsConstructor
@@ -40,8 +39,9 @@ public class Food {
 
     private Integer likesCount;
 
-    private OffsetDateTime createdAt;
+    @TableField(value = "created_at", typeHandler = TimestampTypeHandler.class)
+    private Long createdAt;
 
-    private OffsetDateTime updatedAt;
+    @TableField(value = "updated_at", typeHandler = TimestampTypeHandler.class)
+    private Long updatedAt;
 }
-

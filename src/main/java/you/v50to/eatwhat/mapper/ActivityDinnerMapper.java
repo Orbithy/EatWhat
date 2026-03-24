@@ -1,10 +1,10 @@
 package you.v50to.eatwhat.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.*;
 import you.v50to.eatwhat.data.po.ActivityDinner;
+import you.v50to.eatwhat.utils.StringArrayTypeHandler;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 import java.util.List;
 
@@ -25,6 +25,12 @@ public interface ActivityDinnerMapper extends BaseMapper<ActivityDinner> {
             ORDER BY created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
+    @Results(value = {
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "deletedAt", column = "deleted_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
+    })
     List<ActivityDinner> selectActiveDinners(@Param("offset") Integer offset,
                                              @Param("limit") Integer limit);
 
@@ -35,6 +41,12 @@ public interface ActivityDinnerMapper extends BaseMapper<ActivityDinner> {
             ORDER BY likes_count DESC, created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
+    @Results(value = {
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "deletedAt", column = "deleted_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
+    })
     List<ActivityDinner> selectActiveDinnersOrderByLikes(@Param("offset") Integer offset,
                                                          @Param("limit") Integer limit);
 
@@ -44,5 +56,11 @@ public interface ActivityDinnerMapper extends BaseMapper<ActivityDinner> {
             WHERE id = #{id} AND deleted_at IS NULL
             LIMIT 1
             """)
+    @Results(value = {
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "deletedAt", column = "deleted_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
+    })
     ActivityDinner selectActiveDinnerById(@Param("id") Long id);
 }

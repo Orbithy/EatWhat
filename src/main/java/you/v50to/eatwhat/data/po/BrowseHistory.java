@@ -6,8 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.OffsetDateTime;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 @Data
 @NoArgsConstructor
@@ -22,6 +21,6 @@ public class BrowseHistory {
 
     private Long targetId;
 
-    @TableField("created_at")
-    private OffsetDateTime createdAt;
+    @TableField(value = "created_at", typeHandler = TimestampTypeHandler.class)
+    private Long createdAt;
 }

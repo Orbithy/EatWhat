@@ -28,7 +28,6 @@ import java.util.List;
  * <li>biz=activity — 需要完成 SSO / 邮箱验证（拥有 verified 角色）</li>
  * </ul>
  */
-
 @SaCheckRole("verified")
 @RestController
 @RequestMapping("/upload")

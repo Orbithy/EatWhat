@@ -21,7 +21,6 @@ import you.v50to.eatwhat.mapper.ActivityLikeMapper;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
 import you.v50to.eatwhat.utils.LocationValidationUtil;
 
-import java.time.OffsetDateTime;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -138,7 +137,7 @@ public class ActivityService {
         }
 
         // 软删除
-        food.setDeletedAt(OffsetDateTime.now());
+        food.setDeletedAt(System.currentTimeMillis());
         activityFoodMapper.updateById(food);
         clearFoodByLikesCache();
         return Result.ok();
@@ -212,7 +211,7 @@ public class ActivityService {
         }
 
         // 软删除：写 deleted_at
-        dinner.setDeletedAt(OffsetDateTime.now());
+        dinner.setDeletedAt(System.currentTimeMillis());
         activityDinnerMapper.updateById(dinner);
         clearDinnerByLikesCache();
         return Result.ok();
@@ -270,7 +269,7 @@ public class ActivityService {
         }
 
         // 软删除点赞记录
-        record.setDeletedAt(OffsetDateTime.now());
+        record.setDeletedAt(System.currentTimeMillis());
         activityLikeMapper.updateById(record);
         clearByTargetType(dto.getTargetType());
         return Result.ok();
@@ -407,8 +406,8 @@ public class ActivityService {
         } else {
             dto.setIsLiked(isLiked);
         }
-        dto.setCreatedAt(toEpochMilli(food.getCreatedAt()));
-        dto.setUpdatedAt(toEpochMilli(food.getUpdatedAt()));
+        dto.setCreatedAt(food.getCreatedAt());
+        dto.setUpdatedAt(food.getUpdatedAt());
         return dto;
     }
 
@@ -419,13 +418,9 @@ public class ActivityService {
         dto.setPictureUrl(objectStorageService.signGetUrls(toList(dinner.getPictureUrl())));
         dto.setDescription(dinner.getDescription());
         dto.setLikesCount(dinner.getLikesCount());
-        dto.setCreatedAt(toEpochMilli(dinner.getCreatedAt()));
-        dto.setUpdatedAt(toEpochMilli(dinner.getUpdatedAt()));
+        dto.setCreatedAt(dinner.getCreatedAt());
+        dto.setUpdatedAt(dinner.getUpdatedAt());
         return dto;
-    }
-
-    private Long toEpochMilli(OffsetDateTime time) {
-        return time == null ? null : time.toInstant().toEpochMilli();
     }
 
     private String[] toArray(List<String> pictureUrl) {

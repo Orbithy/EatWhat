@@ -37,3 +37,6 @@ build/
 /io
 /META-INF
 src/main/resources/application.example.yml
+/data
+/docs
+/scripts

@@ -1,11 +1,11 @@
 package you.v50to.eatwhat.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.*;
 import you.v50to.eatwhat.data.po.Food;
 import you.v50to.eatwhat.data.po.FoodFavorite;
+import you.v50to.eatwhat.utils.StringArrayTypeHandler;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 import java.util.List;
 
@@ -35,6 +35,12 @@ public interface FoodFavoriteMapper extends BaseMapper<FoodFavorite> {
             ORDER BY ff.created_at DESC, ff.id DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
+    @Results(value = {
+            @Result(property = "uploaderName", column = "uploaderName"),
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
+    })
     List<Food> selectFavoriteFoodsByAccountId(@Param("accountId") Long accountId,
                                               @Param("offset") int offset,
                                               @Param("limit") int limit);

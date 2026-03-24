@@ -119,8 +119,8 @@ public class FoodService {
         vo.setCategory(food.getCategory());
         vo.setPictureUrl(objectStorageService.signGetUrls(toList(food.getPictureUrl())));
         vo.setLikesCount(food.getLikesCount());
-        vo.setCreatedAt(food.getCreatedAt() != null ? food.getCreatedAt().toInstant().toEpochMilli() : null);
-        vo.setUpdatedAt(food.getUpdatedAt() != null ? food.getUpdatedAt().toInstant().toEpochMilli() : null);
+        vo.setCreatedAt(food.getCreatedAt());
+        vo.setUpdatedAt(food.getUpdatedAt());
         return vo;
     }
 

@@ -5,13 +5,16 @@ import org.apache.ibatis.annotations.*;
 import you.v50to.eatwhat.data.po.Hub;
 import you.v50to.eatwhat.utils.MultiPolygonTypeHandler;
 import you.v50to.eatwhat.utils.PointTypeHandler;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 @Mapper
 public interface HubMapper extends BaseMapper<Hub> {
 
     @Results(id = "hubResultMap", value = {
             @Result(property = "center", column = "center", typeHandler = PointTypeHandler.class),
-            @Result(property = "boundary", column = "boundary", typeHandler = MultiPolygonTypeHandler.class)
+            @Result(property = "boundary", column = "boundary", typeHandler = MultiPolygonTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
     })
     @Select("SELECT * FROM hub WHERE id = #{id}")
     Hub selectHubById(@Param("id") Long id);

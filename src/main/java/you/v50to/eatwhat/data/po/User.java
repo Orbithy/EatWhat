@@ -6,12 +6,11 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.OffsetDateTime;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 @Data
 @NoArgsConstructor
-@TableName("users")
+@TableName(value = "users", autoResultMap = true)
 public class User {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -24,7 +23,10 @@ public class User {
     private String role;
     private Boolean banned;
     private String banReason;
-    private OffsetDateTime bannedAt;
-    private OffsetDateTime createdAt;
-    private OffsetDateTime updatedAt;
+    @TableField(value = "banned_at", typeHandler = TimestampTypeHandler.class)
+    private Long bannedAt;
+    @TableField(value = "created_at", typeHandler = TimestampTypeHandler.class)
+    private Long createdAt;
+    @TableField(value = "updated_at", typeHandler = TimestampTypeHandler.class)
+    private Long updatedAt;
 }

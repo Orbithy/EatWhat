@@ -12,8 +12,7 @@ import tools.jackson.databind.annotation.JsonSerialize;
 import you.v50to.eatwhat.config.JacksonConfig;
 import you.v50to.eatwhat.utils.MultiPolygonTypeHandler;
 import you.v50to.eatwhat.utils.PointTypeHandler;
-
-import java.time.OffsetDateTime;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 @Data
 @NoArgsConstructor
@@ -30,6 +29,8 @@ public class Hub {
     @JsonSerialize(using = JacksonConfig.GeometrySerializer.class)
     @TableField(typeHandler = MultiPolygonTypeHandler.class)
     private MultiPolygon boundary;
-    private OffsetDateTime createdAt;
-    private OffsetDateTime updatedAt;
+    @TableField(value = "created_at", typeHandler = TimestampTypeHandler.class)
+    private Long createdAt;
+    @TableField(value = "updated_at", typeHandler = TimestampTypeHandler.class)
+    private Long updatedAt;
 }

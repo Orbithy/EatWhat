@@ -1,17 +1,18 @@
 package you.v50to.eatwhat.data.po;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 
 /**
  * 用户信息实体
  */
 @Data
-@TableName("user_info")
+@TableName(value = "user_info", autoResultMap = true)
 public class UserInfo {
     
     /**
@@ -58,11 +59,12 @@ public class UserInfo {
     /**
      * 创建时间
      */
-    private OffsetDateTime createdAt;
+    @TableField(value = "created_at", typeHandler = TimestampTypeHandler.class)
+    private Long createdAt;
     
     /**
      * 更新时间
      */
-    private OffsetDateTime updatedAt;
+    @TableField(value = "updated_at", typeHandler = TimestampTypeHandler.class)
+    private Long updatedAt;
 }
-

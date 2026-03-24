@@ -27,8 +27,6 @@ import you.v50to.eatwhat.mapper.UserMapper;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
 import you.v50to.eatwhat.utils.LocationValidationUtil;
 
-import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -416,8 +414,8 @@ public class UserService {
                 status.setBanReason(u.getBanReason());
                 status.setBanExpireAt(null);
                 if (u.getBannedAt() != null) {
-                    String iso = OffsetDateTime.ofInstant(
-                            Instant.ofEpochMilli(u.getBannedAt()), ZoneOffset.ofHours(8)
+                    String iso = java.time.OffsetDateTime.ofInstant(
+                            java.time.Instant.ofEpochMilli(u.getBannedAt()), ZoneOffset.ofHours(8)
                     ).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
                     status.setBannedAt(iso);
                 }
@@ -451,7 +449,7 @@ public class UserService {
                 .eq(User::getId, userId)
                 .set(User::getBanned, true)
                 .set(User::getBanReason, dto.getReason())
-                .set(User::getBannedAt, OffsetDateTime.now()));
+                .set(User::getBannedAt, System.currentTimeMillis()));
         return Result.ok();
     }
 

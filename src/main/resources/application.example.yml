@@ -87,14 +87,12 @@ app:
         - image/webp
         - image/gif
       allowed-read-prefixes:
-<<<<<<< Updated upstream
         - restaurants/
-=======
-
->>>>>>> Stashed changes
         - activity/
         - avatar/
         - foods/
+      public-read-prefixes:
+        - avatar/
 
 sentry:
   dsn:

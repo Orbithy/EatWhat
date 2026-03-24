@@ -1,12 +1,11 @@
 package you.v50to.eatwhat.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.*;
 import you.v50to.eatwhat.data.po.FoodTag;
 import you.v50to.eatwhat.data.vo.AdminFoodTagVO;
 import you.v50to.eatwhat.data.vo.FoodTagSummaryVO;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 import java.util.List;
 
@@ -34,6 +33,10 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
               </foreach>
             </script>
             """)
+    @Results(value = {
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
+    })
     List<FoodTag> selectSystemTagsByIds(@Param("ids") List<Long> ids);
 
     @Select("""
@@ -48,6 +51,10 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
               </foreach>
             </script>
             """)
+    @Results(value = {
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
+    })
     List<FoodTag> selectCustomTagsByOwnerAndNormalizedNames(@Param("ownerId") Long ownerId,
                                                             @Param("normalizedNames") List<String> normalizedNames);
 

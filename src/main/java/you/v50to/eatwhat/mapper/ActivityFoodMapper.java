@@ -1,10 +1,10 @@
 package you.v50to.eatwhat.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.*;
 import you.v50to.eatwhat.data.po.ActivityFood;
+import you.v50to.eatwhat.utils.StringArrayTypeHandler;
+import you.v50to.eatwhat.utils.TimestampTypeHandler;
 
 import java.util.List;
 
@@ -26,6 +26,14 @@ public interface ActivityFoodMapper extends BaseMapper<ActivityFood> {
             ORDER BY f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
+    @Results(value = {
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "deletedAt", column = "deleted_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "uploaderName", column = "uploaderName"),
+            @Result(property = "isLiked", column = "is_liked")
+    })
     List<ActivityFood> selectActiveFoods(@Param("offset") Integer offset,
                                          @Param("limit") Integer limit);
 
@@ -37,6 +45,13 @@ public interface ActivityFoodMapper extends BaseMapper<ActivityFood> {
             ORDER BY f.likes_count DESC, f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
+    @Results(value = {
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "deletedAt", column = "deleted_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "uploaderName", column = "uploaderName")
+    })
     List<ActivityFood> selectActiveFoodsOrderByLikes(@Param("offset") Integer offset,
                                                      @Param("limit") Integer limit);
 
@@ -47,6 +62,13 @@ public interface ActivityFoodMapper extends BaseMapper<ActivityFood> {
             WHERE f.id = #{id} AND f.deleted_at IS NULL
             LIMIT 1
             """)
+    @Results(value = {
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "deletedAt", column = "deleted_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "uploaderName", column = "uploaderName")
+    })
     ActivityFood selectActiveFoodById(@Param("id") Long id);
 
     @Select("""
@@ -65,6 +87,14 @@ public interface ActivityFoodMapper extends BaseMapper<ActivityFood> {
             ORDER BY f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
+    @Results(value = {
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "deletedAt", column = "deleted_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "uploaderName", column = "uploaderName"),
+            @Result(property = "isLiked", column = "is_liked")
+    })
     List<ActivityFood> selectFoodsByProvinceWithLiked(@Param("provinceId") Integer provinceId,
                                                       @Param("accountId") Long accountId,
                                                       @Param("offset") Integer offset,

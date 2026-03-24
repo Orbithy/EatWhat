@@ -21,7 +21,7 @@ public class RestaurantController {
     private RestaurantService restaurantService;
 
     @GetMapping("/search")
-    public Result<PageResult<Restaurant>> searchRestaurants(SearchRestaurantsDTO dto) {
+    public Result<PageResult<Restaurant>> searchRestaurants(@Valid SearchRestaurantsDTO dto) {
         return restaurantService.searchRestaurants(dto);
     }
 

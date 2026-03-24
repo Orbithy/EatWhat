@@ -80,6 +80,12 @@ public class HubService {
         return Result.ok(updated);
     }
 
+    public Result<Hub> findHubByLocation(double gcjLng, double gcjLat) {
+        double[] wgs = you.v50to.eatwhat.utils.CoordinateTransformUtil.gcj02ToWgs84(gcjLng, gcjLat);
+        Hub hub = hubMapper.findHubByLocation(wgs[0], wgs[1]);
+        return Result.ok(hub);
+    }
+
     private void fillHub(Hub hub, HubDTO dto) {
         BeanUtils.copyProperties(dto, hub, "boundaryGeoJson");
         hub.setCenter(GeoUtil.gcjToWgsPoint(dto.getGcjLng(), dto.getGcjLat()));

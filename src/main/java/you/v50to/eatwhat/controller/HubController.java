@@ -19,6 +19,16 @@ public class HubController {
     @Resource
     private HubService hubService;
 
+    /**
+     * 判断餐厅所在的hub
+     */
+    @GetMapping("/locate")
+    public Result<Hub> locateHub(
+            @RequestParam Double gcjLng,
+            @RequestParam Double gcjLat) {
+        return hubService.findHubByLocation(gcjLng, gcjLat);
+    }
+
     @GetMapping("/list")
     public Result<PageResult<Hub>> listHubs(
             @RequestParam(required = false) String keyword,

@@ -35,4 +35,14 @@ public interface HubMapper extends BaseMapper<Hub> {
               AND ST_Covers(h.boundary, r.location::geometry)
             """)
     int bindCoveredRestaurants(@Param("hubId") Long hubId);
+
+    @ResultMap("hubResultMap")
+    @Select("""
+            SELECT *
+            FROM hub
+            WHERE boundary IS NOT NULL
+              AND ST_Covers(boundary, ST_SetSRID(ST_MakePoint(#{wgsLng}, #{wgsLat}), 4326))
+            LIMIT 1
+            """)
+    Hub findHubByLocation(@Param("wgsLng") double wgsLng, @Param("wgsLat") double wgsLat);
 }

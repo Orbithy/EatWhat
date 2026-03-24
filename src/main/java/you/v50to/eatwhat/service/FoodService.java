@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import you.v50to.eatwhat.data.dto.CreateFoodDTO;
 import you.v50to.eatwhat.data.dto.EditFoodDTO;
@@ -11,11 +12,13 @@ import you.v50to.eatwhat.data.dto.FoodVO;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.po.Food;
 import you.v50to.eatwhat.data.po.FoodFavorite;
+import you.v50to.eatwhat.data.po.LikeRecord;
 import you.v50to.eatwhat.data.po.Restaurant;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.FoodFavoriteMapper;
 import you.v50to.eatwhat.mapper.FoodMapper;
+import you.v50to.eatwhat.mapper.LikeMapper;
 import you.v50to.eatwhat.mapper.RestaurantMapper;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
 
@@ -43,6 +46,8 @@ public class FoodService {
     private FoodTagService foodTagService;
     @Resource
     private FoodFavoriteMapper foodFavoriteMapper;
+    @Resource
+    private LikeMapper likeMapper;
 
     public Result<Void> uploadFood(CreateFoodDTO dto) {
         // 校验餐厅是否存在
@@ -107,16 +112,27 @@ public class FoodService {
         return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), total));
     }
 
+    public Result<List<FoodVO>> recommendFoods(Integer limit) {
+        int resolvedLimit = limit == null ? 10 : Math.max(1, Math.min(limit, 20));
+        Long currentUserId = currentUserId();
+        List<Food> foods = foodMapper.selectRecommended(resolvedLimit);
+        List<FoodVO> items = foods.stream().map(this::toVO).toList();
+        fillFoodViews(items, currentUserId);
+        return Result.ok(items);
+    }
+
     private FoodVO toVO(Food food) {
         FoodVO vo = new FoodVO();
         vo.setId(food.getId());
         vo.setAccountId(food.getAccountId());
         vo.setUploaderName(food.getUploaderName());
         vo.setRestaurantId(food.getRestaurantId());
+        vo.setRestaurantName(food.getRestaurantName());
         vo.setName(food.getName());
         vo.setDescription(food.getDescription());
         vo.setPrice(food.getPrice());
         vo.setCategory(food.getCategory());
+        vo.setCategoryLabel(food.getCategory() == null ? null : food.getCategory().getLabel());
         vo.setPictureUrl(objectStorageService.signGetUrls(toList(food.getPictureUrl())));
         vo.setLikesCount(food.getLikesCount());
         vo.setCreatedAt(food.getCreatedAt());
@@ -219,6 +235,55 @@ public class FoodService {
         return Result.ok();
     }
 
+    @Transactional
+    public Result<Void> likeFood(Long foodId) {
+        if (foodMapper.selectById(foodId) == null) {
+            return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
+        }
+
+        Long userId = currentUserId();
+        LikeRecord record = likeMapper.selectOne(new LambdaQueryWrapper<LikeRecord>()
+                .eq(LikeRecord::getAccountId, userId)
+                .eq(LikeRecord::getTargetType, "food")
+                .eq(LikeRecord::getTargetId, foodId));
+        if (record != null && record.getDeletedAt() == null) {
+            return Result.ok();
+        }
+
+        if (record == null) {
+            LikeRecord like = new LikeRecord();
+            like.setAccountId(userId);
+            like.setTargetType("food");
+            like.setTargetId(foodId);
+            likeMapper.insert(like);
+            return Result.ok();
+        }
+
+        record.setDeletedAt(null);
+        likeMapper.updateById(record);
+        return Result.ok();
+    }
+
+    @Transactional
+    public Result<Void> unlikeFood(Long foodId) {
+        if (foodMapper.selectById(foodId) == null) {
+            return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
+        }
+
+        Long userId = currentUserId();
+        LikeRecord record = likeMapper.selectOne(new LambdaQueryWrapper<LikeRecord>()
+                .eq(LikeRecord::getAccountId, userId)
+                .eq(LikeRecord::getTargetType, "food")
+                .eq(LikeRecord::getTargetId, foodId));
+        if (record == null || record.getDeletedAt() != null) {
+            return Result.ok();
+        }
+
+        record.setDeletedAt(System.currentTimeMillis());
+        likeMapper.updateById(record);
+        return Result.ok();
+    }
+
     public Result<Void> unfavoriteFood(Long foodId) {
         if (foodMapper.selectById(foodId) == null) {
             return Result.fail(BizCode.FOOD_NOT_FOUND, "菜品不存在");
@@ -246,7 +311,20 @@ public class FoodService {
 
     private void fillFoodViews(List<FoodVO> items, Long currentUserId) {
         foodTagService.fillFoodTagViews(items, currentUserId);
+        fillLikedState(items, currentUserId);
         fillFavoriteState(items, currentUserId);
+    }
+
+    private void fillLikedState(List<FoodVO> items, Long currentUserId) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        List<Long> foodIds = items.stream().map(FoodVO::getId).toList();
+        List<Long> likedIds = likeMapper.selectLikedTargetIds(currentUserId, "food", foodIds);
+        Set<Long> likedFoodIds = likedIds == null ? Collections.emptySet() : new HashSet<>(likedIds);
+        for (FoodVO item : items) {
+            item.setIsLiked(likedFoodIds.contains(item.getId()));
+        }
     }
 
     private void fillFavoriteState(List<FoodVO> items, Long currentUserId) {

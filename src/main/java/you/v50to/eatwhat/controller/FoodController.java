@@ -64,10 +64,31 @@ public class FoodController {
         return foodService.getFoodDetail(id);
     }
 
+    /**
+     * 推荐食物接口
+     */
+    @SaCheckRole("verified")
+    @GetMapping("/recommend")
+    public Result<List<FoodVO>> recommendFoods(@RequestParam(defaultValue = "10") Integer limit) {
+        return foodService.recommendFoods(limit);
+    }
+
     @SaCheckRole("verified")
     @PostMapping("/{id}/favorite")
     public Result<Void> favoriteFood(@PathVariable Long id) {
         return foodService.favoriteFood(id);
+    }
+
+    @SaCheckRole("verified")
+    @PostMapping("/{id}/like")
+    public Result<Void> likeFood(@PathVariable Long id) {
+        return foodService.likeFood(id);
+    }
+
+    @SaCheckRole("verified")
+    @PostMapping("/{id}/unlike")
+    public Result<Void> unlikeFood(@PathVariable Long id) {
+        return foodService.unlikeFood(id);
     }
 
     @SaCheckRole("verified")

@@ -16,13 +16,16 @@ public class FoodVO {
     private Long accountId;
     private String uploaderName;
     private Long restaurantId;
+    private String restaurantName;
     private String name;
     private String description;
     private BigDecimal price;
     private FoodCategory category;
+    private String categoryLabel;
     private List<String> pictureUrl;
     private List<FoodSystemTagVO> systemTags;
     private List<FoodTagSummaryVO> myCustomTags;
+    private Boolean isLiked;
     private Boolean isFavorite;
     private Integer likesCount;
     private Long createdAt;

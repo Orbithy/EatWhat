@@ -13,15 +13,17 @@ import java.util.Map;
 public interface FoodMapper extends BaseMapper<Food> {
 
     @Select("""
-            SELECT f.*, u.nick_name AS uploaderName
+            SELECT f.*, u.nick_name AS uploaderName, r.name AS restaurantName
             FROM foods f
             JOIN users u ON u.id = f.account_id
+            JOIN restaurant r ON r.id = f.restaurant_id
             WHERE f.restaurant_id = #{restaurantId}
             ORDER BY f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
     @Results(value = {
             @Result(property = "uploaderName", column = "uploaderName"),
+            @Result(property = "restaurantName", column = "restaurantName"),
             @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
@@ -46,15 +48,17 @@ public interface FoodMapper extends BaseMapper<Food> {
                                                @Param("myCustomTagNormalizedNames") List<String> myCustomTagNormalizedNames);
 
     @Select("""
-            SELECT f.*, u.nick_name AS uploaderName
+            SELECT f.*, u.nick_name AS uploaderName, r.name AS restaurantName
             FROM foods f
             JOIN users u ON u.id = f.account_id
+            JOIN restaurant r ON r.id = f.restaurant_id
             WHERE f.account_id = #{accountId}
             ORDER BY f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
     @Results(value = {
             @Result(property = "uploaderName", column = "uploaderName"),
+            @Result(property = "restaurantName", column = "restaurantName"),
             @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
@@ -62,6 +66,25 @@ public interface FoodMapper extends BaseMapper<Food> {
     List<Food> selectByAccountId(@Param("accountId") Long accountId,
                                  @Param("offset") int offset,
                                  @Param("limit") int limit);
+
+    @Select("""
+            SELECT f.*, u.nick_name AS uploaderName, r.name AS restaurantName
+            FROM foods f
+            JOIN users u ON u.id = f.account_id
+            JOIN restaurant r ON r.id = f.restaurant_id
+            WHERE f.picture_url IS NOT NULL
+              AND cardinality(f.picture_url) > 0
+            ORDER BY f.likes_count DESC, f.updated_at DESC, f.id DESC
+            LIMIT #{limit}
+            """)
+    @Results(value = {
+            @Result(property = "uploaderName", column = "uploaderName"),
+            @Result(property = "restaurantName", column = "restaurantName"),
+            @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+            @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
+    })
+    List<Food> selectRecommended(@Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM foods WHERE restaurant_id = #{restaurantId}")
     Long countByRestaurantId(@Param("restaurantId") Long restaurantId);
@@ -87,9 +110,10 @@ public interface FoodMapper extends BaseMapper<Food> {
         public String selectByRestaurantIdWithFilters(Map<String, Object> params) {
             StringBuilder sql = new StringBuilder("""
                     <script>
-                    SELECT f.*, u.nick_name AS uploaderName
+                    SELECT f.*, u.nick_name AS uploaderName, r.name AS restaurantName
                     FROM foods f
                     JOIN users u ON u.id = f.account_id
+                    JOIN restaurant r ON r.id = f.restaurant_id
                     WHERE f.restaurant_id = #{restaurantId}
                     """);
             appendTagFilters(sql, params);

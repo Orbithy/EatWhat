@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
+import java.util.Locale;
+
 @Getter
 public enum UploadBiz {
 
@@ -25,8 +27,12 @@ public enum UploadBiz {
 
     @JsonCreator
     public static UploadBiz fromValue(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("不支持的 biz 类型: null");
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
         for (UploadBiz b : values()) {
-            if (b.value.equals(value)) return b;
+            if (b.value.equals(normalized)) return b;
         }
         throw new IllegalArgumentException("不支持的 biz 类型: " + value);
     }

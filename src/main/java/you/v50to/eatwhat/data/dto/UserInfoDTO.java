@@ -3,6 +3,8 @@ package you.v50to.eatwhat.data.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 /**
  * 用户自己的信息
  */
@@ -23,6 +25,11 @@ public class UserInfoDTO {
     private String studentId;
     private String realName;
     private String verifiedEmail;
+    private String gender;
+    private LocalDate birthday;
+    private String signature;
+    private Integer hometownProvinceId;
+    private Integer hometownCityId;
     private Long createdAt;
     private Long updatedAt;
 }

@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -61,8 +62,7 @@ public class UserService {
     @Resource
     private NotificationService notificationService;
 
-    public Result<UserInfoDTO> getInfo() {
-        Long userId = StpUtil.getLoginIdAsLong();
+    public Result<UserInfoDTO> getInfo(Long userId) {
         UserInfoDTO info = userMapper.selectUserInfoById(userId);
         if (info == null) {
             return Result.fail(BizCode.USER_NOT_FOUND);
@@ -120,7 +120,6 @@ public class UserService {
      */
     public Result<Void> updateUserInfo(UpdateUserInfoDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
-
         // 省份城市校验（使用独立服务）
         Result<Void> validationResult = locationValidationUtil.validateProvinceAndCity(
                 dto.getHometownProvinceId(),
@@ -131,6 +130,12 @@ public class UserService {
 
         // 更新 users 表中的昵称和头像（key）
         if (dto.getUserName() != null || dto.getAvatar() != null) {
+            if (dto.getUserName() != null && userMapper.exists(new LambdaQueryWrapper<User>()
+                    .eq(User::getUserName, dto.getUserName())
+                    .ne(User::getId, userId))) {
+                return Result.fail(BizCode.USERNAME_EXISTS);
+            }
+
             User user = new User();
             user.setId(userId);
             if (dto.getUserName() != null) {
@@ -139,7 +144,14 @@ public class UserService {
             if (dto.getAvatar() != null) {
                 user.setAvatar(dto.getAvatar());
             }
-            userMapper.updateById(user);
+            try {
+                userMapper.updateById(user);
+            } catch (DataIntegrityViolationException e) {
+                if (dto.getUserName() != null) {
+                    return Result.fail(BizCode.USERNAME_EXISTS);
+                }
+                throw e;
+            }
         }
 
         // 更新 user_info 表

@@ -2,6 +2,7 @@ package you.v50to.eatwhat.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.stp.StpUtil;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -31,7 +32,7 @@ public class UserController {
     @SaCheckLogin
     @GetMapping("/info")
     public Result<UserInfoDTO> info() {
-        return userService.getInfo();
+        return userService.getInfo(StpUtil.getLoginIdAsLong());
     }
 
     /**

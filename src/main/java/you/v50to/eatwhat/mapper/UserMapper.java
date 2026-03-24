@@ -16,6 +16,11 @@ public interface UserMapper extends BaseMapper<User> {
                 u.id,
                 u.nick_name AS userName,
                 u.avatar,
+                ui.gender,
+                ui.birthday,
+                ui.signature,
+                ui.hometown_province_id AS hometownProvinceId,
+                ui.hometown_city_id AS hometownCityId,
                 CAST(EXTRACT(EPOCH FROM u.created_at) * 1000 AS bigint) AS createdAt,
                 CAST(EXTRACT(EPOCH FROM u.updated_at) * 1000 AS bigint) AS updatedAt,
                 c.email,
@@ -26,6 +31,7 @@ public interface UserMapper extends BaseMapper<User> {
                 v.real_name AS realName,
                 v.verified_email AS verifiedEmail
             FROM users u
+            LEFT JOIN user_info ui ON ui.id = u.id
             LEFT JOIN contacts c ON c.account_id = u.id
             LEFT JOIN verifications v ON v.account_id = u.id
             WHERE u.id = #{userId}

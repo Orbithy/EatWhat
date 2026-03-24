@@ -23,4 +23,5 @@ public class S3StorageProperties {
     private long maxFileSizeBytes = 5L * 1024 * 1024;
     private List<String> allowedContentTypes = new ArrayList<>();
     private List<String> allowedReadPrefixes = new ArrayList<>();
+    private List<String> publicReadPrefixes = new ArrayList<>(); // 公开读前缀，命中则直接返回 CDN 公开 URL，无需签名
 }

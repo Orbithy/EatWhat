@@ -49,6 +49,11 @@ public class S3CompatibleStorageService implements ObjectStorageService {
             return null;
         }
 
+        // 公开读前缀（如 avatar/）直接返回 CDN 公开 URL，无需签名
+        if (isPublicReadKey(key)) {
+            return toPublicCdnUrl(key);
+        }
+
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(properties.getBucket())
                 .key(key)
@@ -174,6 +179,26 @@ public class S3CompatibleStorageService implements ObjectStorageService {
             return true;
         }
         return prefixes.stream().anyMatch(key::startsWith);
+    }
+
+    private boolean isPublicReadKey(String key) {
+        List<String> publicPrefixes = properties.getPublicReadPrefixes();
+        if (publicPrefixes == null || publicPrefixes.isEmpty()) {
+            return false;
+        }
+        return publicPrefixes.stream().anyMatch(key::startsWith);
+    }
+
+    /**
+     * 拼接公开读的 CDN URL（无签名）。
+     * path-style: {endpoint}/{bucket}/{key}
+     */
+    private String toPublicCdnUrl(String key) {
+        String base = StringUtils.hasText(properties.getCdnEndpoint())
+                ? properties.getCdnEndpoint()
+                : properties.getEndpoint();
+        String normalizedBase = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+        return normalizedBase + "/" + properties.getBucket() + "/" + key;
     }
 
     private String buildObjectKey(String biz, Long userId, String fileName) {

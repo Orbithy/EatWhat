@@ -71,11 +71,12 @@ app:
     key: ${JWT_SECRET}
   storage:
     s3:
-      endpoint: ${S3_ENDPOINT}
-      region: ${S3_REGION}
-      bucket: ${S3_BUCKET}
-      access-key: ${S3_ACCESS_KEY}
-      secret-key: ${S3_SECRET_KEY}
+      endpoint: ${S3_ENDPOINT:https://sgp1.digitaloceanspaces.com}
+      cdn-endpoint: ${S3_CDN_ENDPOINT:https://sgp1.cdn.digitaloceanspaces.com}
+      region: sg
+      bucket: sdueatwhat
+      access-key: DO801Q8JVPCMJRDLLE9T
+      secret-key: Ta3xgrE+US6Hy6WgDWzT//pf5LRvWb3NGgQFP+OZV9A
       path-style: ${S3_PATH_STYLE:true}
       sign-get-ttl-seconds: ${S3_SIGN_GET_TTL:600}
       sign-put-ttl-seconds: ${S3_SIGN_PUT_TTL:300}
@@ -86,7 +87,11 @@ app:
         - image/webp
         - image/gif
       allowed-read-prefixes:
+<<<<<<< Updated upstream
         - restaurants/
+=======
+
+>>>>>>> Stashed changes
         - activity/
         - avatar/
         - foods/

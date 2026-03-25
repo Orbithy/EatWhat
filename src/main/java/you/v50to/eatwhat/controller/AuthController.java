@@ -5,6 +5,7 @@ import cn.dev33.satoken.stp.SaTokenInfo;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import you.v50to.eatwhat.data.dto.ChangePwdDTO;
@@ -15,7 +16,6 @@ import you.v50to.eatwhat.data.enums.Scene;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.AuthService;
 import you.v50to.eatwhat.utils.IpUtil;
-import jakarta.validation.Valid;
 
 import java.util.HashMap;
 import java.util.List;

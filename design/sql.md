@@ -692,7 +692,7 @@ CREATE TRIGGER update_activity_likes_count_trigger
 -- ============================================
 -- 触发器：自动维护点赞数缓存（likes）
 -- ============================================
-CREATE OR REPLACE FUNCTION update_likes_count()
+CREATE OR REPLACE FUNCTION update_foods_likes_count()
 RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' AND NEW.deleted_at IS NULL THEN
@@ -724,9 +724,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_likes_count_trigger
+CREATE TRIGGER update_foods_likes_count_trigger
   AFTER INSERT OR UPDATE OR DELETE ON likes
-  FOR EACH ROW EXECUTE FUNCTION update_likes_count();
+  FOR EACH ROW EXECUTE FUNCTION update_foods_likes_count();
 
 -- ============================================
 -- 定期清理过期通知的定时任务（需要 pg_cron 扩展）

@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
+import java.util.Locale;
+
 @Getter
 public enum FoodCategory {
 
@@ -31,8 +33,12 @@ public enum FoodCategory {
 
     @JsonCreator
     public static FoodCategory fromValue(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("未知的菜品分类: null");
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
         for (FoodCategory c : values()) {
-            if (c.value.equals(value)) return c;
+            if (c.value.equals(normalized)) return c;
         }
         throw new IllegalArgumentException("未知的菜品分类: " + value);
     }

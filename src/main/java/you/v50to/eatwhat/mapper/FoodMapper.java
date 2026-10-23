@@ -2,6 +2,7 @@ package you.v50to.eatwhat.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.*;
+import you.v50to.eatwhat.data.dto.FoodCandidateRow;
 import you.v50to.eatwhat.data.po.Food;
 import you.v50to.eatwhat.utils.StringArrayTypeHandler;
 import you.v50to.eatwhat.utils.TimestampTypeHandler;
@@ -12,12 +13,34 @@ import java.util.Map;
 @Mapper
 public interface FoodMapper extends BaseMapper<Food> {
 
+    @SelectProvider(type = FoodQuerySql.class, method = "select")
+    @Results(value = {
+        @Result(property = "uploaderName", column = "uploaderName"),
+        @Result(property = "restaurantName", column = "restaurantName"),
+        @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+        @Result(property = "mealTimes", column = "meal_times", typeHandler = StringArrayTypeHandler.class),
+        @Result(property = "stageAlternates", column = "stage_alternates", typeHandler = StringArrayTypeHandler.class),
+        @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
+        @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
+    })
+    List<Food> selectFoods(@Param("query") you.v50to.eatwhat.data.dto.FoodQueryDTO query,
+                          @Param("currentUserId") Long currentUserId,
+                          @Param("favoritesOnly") boolean favoritesOnly,
+                          @Param("tagNames") List<String> tagNames,
+                          @Param("offset") long offset, @Param("limit") int limit);
+
+    @SelectProvider(type = FoodQuerySql.class, method = "count")
+    Long countFoods(@Param("query") you.v50to.eatwhat.data.dto.FoodQueryDTO query,
+                    @Param("currentUserId") Long currentUserId,
+                    @Param("favoritesOnly") boolean favoritesOnly,
+                    @Param("tagNames") List<String> tagNames);
+
     @Select("""
-            SELECT f.*, u.nick_name AS uploaderName, r.name AS restaurantName
+            SELECT f.*, COALESCE(u.display_name, u.nick_name) AS uploaderName, r.name AS restaurantName
             FROM foods f
             JOIN users u ON u.id = f.account_id
             JOIN restaurant r ON r.id = f.restaurant_id
-            WHERE f.restaurant_id = #{restaurantId}
+            WHERE f.catalog_visible AND EXISTS (SELECT 1 FROM restaurant cv_parent WHERE cv_parent.id=f.restaurant_id AND cv_parent.catalog_visible) AND f.restaurant_id = #{restaurantId}
             ORDER BY f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
@@ -25,6 +48,8 @@ public interface FoodMapper extends BaseMapper<Food> {
             @Result(property = "uploaderName", column = "uploaderName"),
             @Result(property = "restaurantName", column = "restaurantName"),
             @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "mealTimes", column = "meal_times", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "stageAlternates", column = "stage_alternates", typeHandler = StringArrayTypeHandler.class),
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
     })
@@ -36,6 +61,8 @@ public interface FoodMapper extends BaseMapper<Food> {
     @Results(value = {
             @Result(property = "uploaderName", column = "uploaderName"),
             @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "mealTimes", column = "meal_times", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "stageAlternates", column = "stage_alternates", typeHandler = StringArrayTypeHandler.class),
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
     })
@@ -48,11 +75,11 @@ public interface FoodMapper extends BaseMapper<Food> {
                                                @Param("myCustomTagNormalizedNames") List<String> myCustomTagNormalizedNames);
 
     @Select("""
-            SELECT f.*, u.nick_name AS uploaderName, r.name AS restaurantName
+            SELECT f.*, COALESCE(u.display_name, u.nick_name) AS uploaderName, r.name AS restaurantName
             FROM foods f
             JOIN users u ON u.id = f.account_id
             JOIN restaurant r ON r.id = f.restaurant_id
-            WHERE f.account_id = #{accountId}
+            WHERE f.catalog_visible AND r.catalog_visible AND f.account_id = #{accountId}
             ORDER BY f.created_at DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
@@ -60,6 +87,8 @@ public interface FoodMapper extends BaseMapper<Food> {
             @Result(property = "uploaderName", column = "uploaderName"),
             @Result(property = "restaurantName", column = "restaurantName"),
             @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "mealTimes", column = "meal_times", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "stageAlternates", column = "stage_alternates", typeHandler = StringArrayTypeHandler.class),
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
     })
@@ -67,26 +96,23 @@ public interface FoodMapper extends BaseMapper<Food> {
                                  @Param("offset") int offset,
                                  @Param("limit") int limit);
 
-    @Select("""
-            SELECT f.*, u.nick_name AS uploaderName, r.name AS restaurantName
-            FROM foods f
-            JOIN users u ON u.id = f.account_id
-            JOIN restaurant r ON r.id = f.restaurant_id
-            WHERE f.picture_url IS NOT NULL
-              AND cardinality(f.picture_url) > 0
-            ORDER BY f.likes_count DESC, f.updated_at DESC, f.id DESC
-            LIMIT #{limit}
-            """)
+    @SelectProvider(type = FoodRecommendationSql.class, method = "selectCandidates")
     @Results(value = {
             @Result(property = "uploaderName", column = "uploaderName"),
             @Result(property = "restaurantName", column = "restaurantName"),
             @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "mealTimes", column = "meal_times", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "stageAlternates", column = "stage_alternates", typeHandler = StringArrayTypeHandler.class),
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
     })
-    List<Food> selectRecommended(@Param("limit") int limit);
+    List<FoodCandidateRow> selectRecommendationCandidates(@Param("accountId") Long accountId,
+                                                          @Param("campusId") Long campusId,
+                                                          @Param("defaultCampus") boolean defaultCampus,
+                                                          @Param("category") String category,
+                                                          @Param("limit") int limit);
 
-    @Select("SELECT COUNT(*) FROM foods WHERE restaurant_id = #{restaurantId}")
+    @Select("SELECT COUNT(*) FROM foods WHERE catalog_visible AND EXISTS (SELECT 1 FROM restaurant cv_parent WHERE cv_parent.id=foods.restaurant_id AND cv_parent.catalog_visible) AND restaurant_id = #{restaurantId}")
     Long countByRestaurantId(@Param("restaurantId") Long restaurantId);
 
     @SelectProvider(type = FoodSqlProvider.class, method = "countByRestaurantIdWithFilters")
@@ -96,13 +122,13 @@ public interface FoodMapper extends BaseMapper<Food> {
                                         @Param("myCustomTagIds") List<Long> myCustomTagIds,
                                         @Param("myCustomTagNormalizedNames") List<String> myCustomTagNormalizedNames);
 
-    @Select("SELECT COUNT(*) FROM foods WHERE account_id = #{accountId}")
+    @Select("SELECT COUNT(*) FROM foods WHERE catalog_visible AND EXISTS (SELECT 1 FROM restaurant cv_parent WHERE cv_parent.id=foods.restaurant_id AND cv_parent.catalog_visible) AND account_id = #{accountId}")
     Long countByAccountId(@Param("accountId") Long accountId);
 
-    @Select("SELECT COUNT(*) FROM foods")
+    @Select("SELECT COUNT(*) FROM foods WHERE catalog_visible AND EXISTS (SELECT 1 FROM restaurant cv_parent WHERE cv_parent.id=foods.restaurant_id AND cv_parent.catalog_visible)")
     Long countTotal();
 
-    @Select("SELECT COUNT(*) FROM foods WHERE created_at >= CURRENT_DATE")
+    @Select("SELECT COUNT(*) FROM foods WHERE catalog_visible AND EXISTS (SELECT 1 FROM restaurant cv_parent WHERE cv_parent.id=foods.restaurant_id AND cv_parent.catalog_visible) AND created_at >= CURRENT_DATE")
     Long countToday();
 
     class FoodSqlProvider {
@@ -110,11 +136,11 @@ public interface FoodMapper extends BaseMapper<Food> {
         public String selectByRestaurantIdWithFilters(Map<String, Object> params) {
             StringBuilder sql = new StringBuilder("""
                     <script>
-                    SELECT f.*, u.nick_name AS uploaderName, r.name AS restaurantName
+                    SELECT f.*, COALESCE(u.display_name, u.nick_name) AS uploaderName, r.name AS restaurantName
                     FROM foods f
                     JOIN users u ON u.id = f.account_id
                     JOIN restaurant r ON r.id = f.restaurant_id
-                    WHERE f.restaurant_id = #{restaurantId}
+                    WHERE f.catalog_visible AND EXISTS (SELECT 1 FROM restaurant cv_parent WHERE cv_parent.id=f.restaurant_id AND cv_parent.catalog_visible) AND f.restaurant_id = #{restaurantId}
                     """);
             appendTagFilters(sql, params);
             sql.append("""
@@ -131,7 +157,7 @@ public interface FoodMapper extends BaseMapper<Food> {
                     <script>
                     SELECT COUNT(*)
                     FROM foods f
-                    WHERE f.restaurant_id = #{restaurantId}
+                    WHERE f.catalog_visible AND EXISTS (SELECT 1 FROM restaurant cv_parent WHERE cv_parent.id=f.restaurant_id AND cv_parent.catalog_visible) AND f.restaurant_id = #{restaurantId}
                     """);
             appendTagFilters(sql, params);
             sql.append("""
@@ -153,7 +179,7 @@ public interface FoodMapper extends BaseMapper<Food> {
                           SELECT COUNT(DISTINCT ft.id)
                           FROM food_taggings ftg
                           JOIN food_tags ft ON ft.id = ftg.tag_id
-                          WHERE ftg.food_id = f.id
+                          WHERE ft.catalog_visible AND ftg.food_id = f.id
                             AND ft.tag_type = 'system'
                             AND ft.id IN
                             <foreach collection='systemTagIds' item='tagId' open='(' separator=',' close=')'>
@@ -169,7 +195,7 @@ public interface FoodMapper extends BaseMapper<Food> {
                           SELECT COUNT(DISTINCT ft.id)
                           FROM food_taggings ftg
                           JOIN food_tags ft ON ft.id = ftg.tag_id
-                          WHERE ftg.food_id = f.id
+                          WHERE ft.catalog_visible AND ftg.food_id = f.id
                             AND ftg.account_id = #{currentUserId}
                             AND ft.tag_type = 'custom'
                             AND ft.id IN
@@ -186,7 +212,7 @@ public interface FoodMapper extends BaseMapper<Food> {
                           SELECT COUNT(DISTINCT ft.normalized_name)
                           FROM food_taggings ftg
                           JOIN food_tags ft ON ft.id = ftg.tag_id
-                          WHERE ftg.food_id = f.id
+                          WHERE ft.catalog_visible AND ftg.food_id = f.id
                             AND ftg.account_id = #{currentUserId}
                             AND ft.tag_type = 'custom'
                             AND ft.normalized_name IN

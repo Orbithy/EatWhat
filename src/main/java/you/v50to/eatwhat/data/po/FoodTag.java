@@ -12,6 +12,12 @@ import you.v50to.eatwhat.utils.TimestampTypeHandler;
 @NoArgsConstructor
 @TableName(value = "food_tags", autoResultMap = true)
 public class FoodTag {
+    @com.baomidou.mybatisplus.annotation.TableField(value="catalog_visible",
+        insertStrategy=com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER,
+        updateStrategy=com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Boolean catalogVisible;
+
 
     @TableId(type = IdType.AUTO)
     private Long id;

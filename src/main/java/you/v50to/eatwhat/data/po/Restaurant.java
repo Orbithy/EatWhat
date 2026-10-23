@@ -19,8 +19,17 @@ import you.v50to.eatwhat.utils.TimestampTypeHandler;
 @NoArgsConstructor
 @TableName(value = "restaurant", autoResultMap = true)
 public class Restaurant {
+    @com.baomidou.mybatisplus.annotation.TableField(value="catalog_visible",
+        insertStrategy=com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER,
+        updateStrategy=com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Boolean catalogVisible;
+
     @TableId(type = IdType.AUTO)
     private Long id;
+    /**
+     * 上传用户id
+     */
     private Long accountId;
     private String name;
     private String address;

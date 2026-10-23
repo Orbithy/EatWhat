@@ -1,0 +1,131 @@
+# An isolated deployment example. Rendering this file does not start services.
+name: eatwhat-campus
+
+services:
+  app:
+    image: ${JRE_IMAGE:?Select a reviewed Java 21 runtime image}
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Only the verified JAR and this dedicated configuration are mounted.
+    volumes:
+      - type: bind
+        source: ${APP_JAR:?Use an absolute path to the verified JAR}
+        target: /app/app.jar
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./application.properties:/config/application.properties:ro
+    command:
+      - java
+      - -jar
+      - /app/app.jar
+      - --spring.config.location=file:/config/application.properties
+      - --spring.config.additional-location=
+      - --spring.config.import=
+    ports:
+      - "127.0.0.1:${APP_HTTP_PORT:?Set a distinct local application port}:8080"
+    environment:
+      SITE_MODE: CAMPUS
+      S3_PROVIDER: RUSTFS
+      SITE_ID: ${SITE_ID:?Set a unique site identifier}
+      SITE_INSTANCE_ID: ${SITE_INSTANCE_ID:?Generate and persist a UUID for this database installation}
+      DB_URL: jdbc:postgresql://postgres:5432/${PG_DB:?Set the application database name}
+      DB_APP_USER: ${PG_APP_USER:?Set the application database user}
+      DB_APP_PASSWORD: ${PG_APP_PASSWORD:?Set the application database password}
+      DB_MIGRATION_USER: ${PG_ADMIN_USER:?Set the migration administrator}
+      DB_MIGRATION_PASSWORD: ${PG_ADMIN_PASSWORD:?Set the migration administrator password}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a unique Redis password}
+      APP_BASE_URL: ${APP_BASE_URL:?Set this site application URL}
+      APP_OAUTH_URL: ${APP_OAUTH_URL:?Set the authorized school authentication URL}
+      APP_OAUTH_CALLBACK_URL: ${APP_OAUTH_CALLBACK_URL:-https://v50to.you/api/callback}
+      APP_JWT_KEY: ${APP_JWT_KEY:?Set the existing authentication key}
+      MAIL_HOST: ${MAIL_HOST:?Set the mail server}
+      MAIL_PORT: ${MAIL_PORT:?Set the mail port}
+      MAIL_USERNAME: ${MAIL_USERNAME:?Set the mail username}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?Set the mail password}
+      MAIL_FROM: ${MAIL_FROM:?Set the mail sender}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-EatWhat}
+      MAIL_SSL_ENABLED: ${MAIL_SSL_ENABLED:-true}
+      MAIL_STARTTLS_ENABLED: ${MAIL_STARTTLS_ENABLED:-false}
+      SMS_ACCESS_KEY_ID: ${SMS_ACCESS_KEY_ID:?Set the SMS key}
+      SMS_ACCESS_KEY_SECRET: ${SMS_ACCESS_KEY_SECRET:?Set the SMS secret}
+      SMS_SIGN_NAME: ${SMS_SIGN_NAME:?Set the approved SMS sign name}
+      SA_TOKEN_TIMEOUT: ${SA_TOKEN_TIMEOUT:--1}
+      SA_TOKEN_ACTIVE_TIMEOUT: ${SA_TOKEN_ACTIVE_TIMEOUT:-259200}
+      SA_TOKEN_CONCURRENT: ${SA_TOKEN_CONCURRENT:-false}
+      SA_TOKEN_SHARE: ${SA_TOKEN_SHARE:-false}
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set a client reachable S3 API endpoint}
+      S3_REGION: ${S3_REGION:?Set the S3 signing region}
+      S3_BUCKET: ${S3_BUCKET:?Set the existing bucket}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set the bucket access key}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set the bucket secret}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
+      S3_ALLOWED_READ_PREFIXES: ${S3_ALLOWED_READ_PREFIXES:?Set approved readable prefixes}
+      S3_PUBLIC_READ_PREFIXES: ${S3_PUBLIC_READ_PREFIXES:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: ${POSTGRES_IMAGE:?Select a reviewed PostGIS image}
+    platform: ${POSTGRES_PLATFORM:?Set the architecture matching the selected image}
+    restart: unless-stopped
+    environment:
+      # Keep the image-managed PostGIS database separate from the empty application DB.
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${PG_ADMIN_USER:?Set the migration administrator}
+      POSTGRES_PASSWORD: ${PG_ADMIN_PASSWORD:?Set the migration administrator password}
+      PG_DB: ${PG_DB:?Set the application database name}
+      PG_APP_USER: ${PG_APP_USER:?Set a separate non-superuser role}
+      PG_APP_PASSWORD: ${PG_APP_PASSWORD:?Set the application database password}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./initdb/20-create-application-db.sh:/docker-entrypoint-initdb.d/20-create-application-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$$POSTGRES_PASSWORD\" psql -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$PG_DB\" -tAc 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 30s
+    shm_size: 256mb
+
+  redis:
+    image: ${REDIS_IMAGE:?Select a reviewed Redis image}
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a unique Redis password}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q '^PONG$'"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  rustfs:
+    image: ${RUSTFS_IMAGE:?Select a reviewed RustFS version or digest}
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ROOT_ACCESS_KEY:?Set a unique RustFS administrator key}
+      RUSTFS_SECRET_KEY: ${RUSTFS_ROOT_SECRET_KEY:?Set a unique RustFS administrator secret}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    command: ["/data"]
+    volumes:
+      - rustfs_data:/data
+    # Publish through the campus TLS proxy; do not expose the console publicly.
+    ports:
+      - "127.0.0.1:${RUSTFS_API_PORT:?Set the local RustFS API port}:9000"
+      - "127.0.0.1:${RUSTFS_CONSOLE_PORT:?Set the local RustFS console port}:9001"
+
+volumes:
+  pg_data:
+  redis_data:
+  rustfs_data:

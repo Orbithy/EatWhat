@@ -50,7 +50,7 @@ public interface FoodTaggingMapper extends BaseMapper<FoodTagging> {
               BOOL_OR(ftg.account_id = #{accountId}) AS taggedByMe
             FROM food_taggings ftg
             JOIN food_tags ft ON ft.id = ftg.tag_id
-            WHERE ft.tag_type = 'system'
+            WHERE ft.catalog_visible AND ft.tag_type = 'system'
               AND ftg.food_id IN
               <foreach collection='foodIds' item='foodId' open='(' separator=',' close=')'>
                 #{foodId}
@@ -70,7 +70,7 @@ public interface FoodTaggingMapper extends BaseMapper<FoodTagging> {
               ft.name AS tagName
             FROM food_taggings ftg
             JOIN food_tags ft ON ft.id = ftg.tag_id
-            WHERE ft.tag_type = 'custom'
+            WHERE ft.catalog_visible AND ft.tag_type = 'custom'
               AND ftg.account_id = #{accountId}
               AND ftg.food_id IN
               <foreach collection='foodIds' item='foodId' open='(' separator=',' close=')'>

@@ -17,7 +17,7 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
             <script>
             SELECT id, name
             FROM food_tags
-            WHERE tag_type = 'system'
+            WHERE catalog_visible AND tag_type = 'system'
             ORDER BY name ASC, id ASC
             </script>
             """)
@@ -27,7 +27,7 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
             <script>
             SELECT *
             FROM food_tags
-            WHERE tag_type = 'system'
+            WHERE catalog_visible AND tag_type = 'system'
               AND id IN
               <foreach collection='ids' item='id' open='(' separator=',' close=')'>
                 #{id}
@@ -44,7 +44,7 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
             <script>
             SELECT *
             FROM food_tags
-            WHERE tag_type = 'custom'
+            WHERE catalog_visible AND tag_type = 'custom'
               AND owner_id = #{ownerId}
               AND normalized_name IN
               <foreach collection='normalizedNames' item='name' open='(' separator=',' close=')'>
@@ -69,7 +69,7 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
               EXTRACT(EPOCH FROM ft.updated_at) * 1000 AS updatedAt
             FROM food_tags ft
             LEFT JOIN food_taggings ftg ON ftg.tag_id = ft.id
-            WHERE ft.tag_type = 'system'
+            WHERE ft.catalog_visible AND ft.tag_type = 'system'
             GROUP BY ft.id
             ORDER BY ft.created_at DESC, ft.id DESC
             LIMIT #{limit} OFFSET #{offset}
@@ -80,7 +80,7 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
     @Select("""
             SELECT COUNT(*)
             FROM food_tags
-            WHERE tag_type = 'system'
+            WHERE catalog_visible AND tag_type = 'system'
             """)
     Long countSystemTags();
 
@@ -91,7 +91,7 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
               COUNT(ftg.id) AS usageCount
             FROM food_tags ft
             LEFT JOIN food_taggings ftg ON ftg.tag_id = ft.id AND ftg.account_id = #{ownerId}
-            WHERE ft.tag_type = 'custom'
+            WHERE ft.catalog_visible AND ft.tag_type = 'custom'
               AND ft.owner_id = #{ownerId}
             GROUP BY ft.id, ft.name
             ORDER BY ft.created_at DESC, ft.id DESC
@@ -104,7 +104,7 @@ public interface FoodTagMapper extends BaseMapper<FoodTag> {
     @Select("""
             SELECT COUNT(*)
             FROM food_tags
-            WHERE tag_type = 'custom'
+            WHERE catalog_visible AND tag_type = 'custom'
               AND owner_id = #{ownerId}
             """)
     Long countCustomTagsByOwner(@Param("ownerId") Long ownerId);

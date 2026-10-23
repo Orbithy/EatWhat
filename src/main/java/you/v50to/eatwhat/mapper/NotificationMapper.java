@@ -29,7 +29,7 @@ public interface NotificationMapper extends BaseMapper<Notification> {
             SELECT
                 n.id,
                 n.actor_id AS actorId,
-                u.nick_name AS actorName,
+                COALESCE(u.display_name, u.nick_name) AS actorName,
                 u.avatar AS actorAvatar,
                 n.type,
                 n.target_type AS targetType,

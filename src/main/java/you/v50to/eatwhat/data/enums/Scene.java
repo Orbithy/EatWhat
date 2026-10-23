@@ -5,5 +5,7 @@ public enum Scene {
     change,
     forget,
     bind,
-    verifybind
+    verifybind,
+    /** 手机号验证码登录（新号码自动注册），不绑定账号 */
+    login
 }

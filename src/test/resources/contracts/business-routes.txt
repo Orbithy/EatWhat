@@ -1,10 +1,9 @@
-# Frozen business API surface, 2026-10-12. Additions are allowed.
 # /auth/register and /auth/login have separately authorized consent-flow changes.
 # 2026-10-23: regional food and dinner activities retired; generic /activity/{code} routes replace them.
-ANY /auth/callback | params=[];headers=[];consumes=[];produces=[]
+# 2026-10-23: stateless legacy callbacks removed; only /callback/{state} variants remain.
+# Frozen business API surface, 2026-10-12. Additions are allowed.
 ANY /auth/callback/{state} | params=[];headers=[];consumes=[];produces=[]
 ANY /auth/sdu | params=[];headers=[];consumes=[];produces=[]
-ANY /callback | params=[];headers=[];consumes=[];produces=[]
 ANY /callback/{state} | params=[];headers=[];consumes=[];produces=[]
 DELETE /activity/posts/{id} | params=[];headers=[];consumes=[];produces=[]
 DELETE /activity/posts/{id}/like | params=[];headers=[];consumes=[];produces=[]
@@ -21,6 +20,7 @@ GET /activity/{code} | params=[];headers=[];consumes=[];produces=[]
 GET /activity/{code}/posts | params=[];headers=[];consumes=[];produces=[]
 GET /admin/activities | params=[];headers=[];consumes=[];produces=[]
 GET /admin/activities/{id} | params=[];headers=[];consumes=[];produces=[]
+GET /admin/consent/policy | params=[];headers=[];consumes=[];produces=[]
 GET /admin/food-tags | params=[];headers=[];consumes=[];produces=[]
 GET /admin/summary | params=[];headers=[];consumes=[];produces=[]
 GET /api/location/provinces | params=[];headers=[];consumes=[];produces=[]
@@ -58,6 +58,7 @@ POST /admin/activities/{id}/status | params=[];headers=[];consumes=[];produces=[
 POST /admin/food-tags | params=[];headers=[];consumes=[];produces=[]
 POST /auth/changePassword | params=[];headers=[];consumes=[];produces=[]
 POST /auth/checkUsername | params=[];headers=[];consumes=[];produces=[]
+POST /auth/username/set | params=[];headers=[];consumes=[];produces=[]
 POST /auth/getCode | params=[];headers=[];consumes=[];produces=[]
 POST /auth/logout | params=[];headers=[];consumes=[];produces=[]
 POST /auth/password/code | params=[];headers=[];consumes=[];produces=[]
@@ -86,6 +87,7 @@ POST /user/getCode | params=[];headers=[];consumes=[];produces=[]
 POST /user/unban/{userId} | params=[];headers=[];consumes=[];produces=[]
 POST /user/unfollow | params=[];headers=[];consumes=[];produces=[]
 PUT /admin/activities/{id} | params=[];headers=[];consumes=[];produces=[]
+PUT /admin/consent/policy | params=[];headers=[];consumes=[];produces=[]
 PUT /admin/food-tags/{id} | params=[];headers=[];consumes=[];produces=[]
 PUT /foods/edit/{id} | params=[];headers=[];consumes=[];produces=[]
 PUT /foods/tags/my/{tagId} | params=[];headers=[];consumes=[];produces=[]

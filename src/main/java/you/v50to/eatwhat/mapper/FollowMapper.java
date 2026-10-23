@@ -22,7 +22,7 @@ public interface FollowMapper extends BaseMapper<Follow> {
     @Select("""
             SELECT
                 u.id,
-                u.nick_name AS userName,
+                COALESCE(u.display_name, u.nick_name) AS userName,
                 u.avatar,
                 CAST(EXTRACT(EPOCH FROM f.created_at) * 1000 AS bigint) AS createdAt
             FROM follow f
@@ -45,7 +45,7 @@ public interface FollowMapper extends BaseMapper<Follow> {
     @Select("""
             SELECT
                 u.id,
-                u.nick_name AS userName,
+                COALESCE(u.display_name, u.nick_name) AS userName,
                 u.avatar,
                 CAST(EXTRACT(EPOCH FROM f.created_at) * 1000 AS bigint) AS createdAt
             FROM follow f

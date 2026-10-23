@@ -1,7 +1,6 @@
 package you.v50to.eatwhat.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.stp.StpUtil;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
@@ -22,7 +21,6 @@ public class HistoryController {
     @Resource
     private BrowseHistoryService browseHistoryService;
 
-    @SaCheckRole("verified")
     @GetMapping("/browse")
     public Result<PageResult<BrowseHistoryItemDTO>> getBrowseHistory(@Valid BrowseHistoryQueryDTO dto) {
         return browseHistoryService.getBrowseHistory(StpUtil.getLoginIdAsLong(), dto);

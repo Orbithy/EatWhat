@@ -40,6 +40,7 @@ public enum BizCode {
     MOBILE_NOT_BOUND(30011, "还没有绑定手机号"),
     SSO_STATE_INVALID(30012, "认证链接已失效，请回到 App 重新发起认证"),
     STUDENT_ID_TAKEN(30013, "这个学号已经认证过其他账号"),
+    USERNAME_REGISTRATION_CLOSED(30014, "请使用手机号验证码注册"),
 
     // 4xxxx 业务逻辑错误
     OP_FAILED(40001, "操作失败"),

@@ -1,17 +1,25 @@
 package you.v50to.eatwhat.service.storage;
 
+import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
+import org.springframework.web.util.UriUtils;
 import you.v50to.eatwhat.config.S3StorageProperties;
+import you.v50to.eatwhat.config.FileLifecycleProperties;
 import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.enums.UploadBiz;
 import you.v50to.eatwhat.exception.BizException;
+import you.v50to.eatwhat.service.storage.replication.FileUrlResolver;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Configuration;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
@@ -19,6 +27,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.YearMonth;
@@ -28,13 +37,34 @@ import java.util.Locale;
 import java.util.UUID;
 
 @Service
-public class S3CompatibleStorageService implements ObjectStorageService {
+public class S3CompatibleStorageService implements ObjectStorageService, FileObjectStorage, AutoCloseable {
 
     private final S3StorageProperties properties;
+    private final FileAliasResolver fileAliasResolver;
+    private final FileLifecycleProperties fileLifecycleProperties;
     private volatile S3Presigner presigner;
+    private volatile S3Client client;
+    private volatile FileUrlResolver fileUrlResolver;
+
+    @Autowired
+    public S3CompatibleStorageService(S3StorageProperties properties, FileAliasResolver fileAliasResolver,
+                                     FileLifecycleProperties fileLifecycleProperties) {
+        this.properties = properties;
+        this.fileAliasResolver = fileAliasResolver;
+        this.fileLifecycleProperties = fileLifecycleProperties;
+    }
+
+    public S3CompatibleStorageService(S3StorageProperties properties, FileAliasResolver fileAliasResolver) {
+        this(properties, fileAliasResolver, new FileLifecycleProperties());
+    }
 
     public S3CompatibleStorageService(S3StorageProperties properties) {
-        this.properties = properties;
+        this(properties, null, new FileLifecycleProperties());
+    }
+
+    @Autowired(required = false)
+    public void setFileUrlResolver(FileUrlResolver resolver) {
+        this.fileUrlResolver = resolver;
     }
 
     @Override
@@ -42,6 +72,22 @@ public class S3CompatibleStorageService implements ObjectStorageService {
         if (!StringUtils.hasText(key)) {
             return key;
         }
+        FileAliasResolver.Resolution managed = fileAliasResolver == null
+                ? new FileAliasResolver.Resolution(false, null) : fileAliasResolver.resolve(key);
+        if (managed.managed()) {
+            if (!StringUtils.hasText(managed.readableObjectKey())) return null;
+            // Use FileUrlResolver if available to check CDN eligibility
+            if (fileUrlResolver != null) {
+                FileUrlResolver.Resolution resolution = fileUrlResolver.describe(key);
+                if (resolution.state() == FileUrlResolver.State.PENDING || !StringUtils.hasText(resolution.finalKey())) return null;
+                if (resolution.cdnEligible() && StringUtils.hasText(properties.getPublicBaseUrl()) && usesProviderUrlPolicy()) {
+                    return toPublicCdnUrl(resolution.finalKey());
+                }
+            }
+            return signManagedGet(managed.readableObjectKey());
+        }
+        if (key.startsWith("staging/") || key.startsWith("verified/")) return null;
+        if (!fileLifecycleProperties.isLegacyReadEnabled()) return null;
         if (isHttpUrl(key)) {
             return key;
         }
@@ -65,7 +111,15 @@ public class S3CompatibleStorageService implements ObjectStorageService {
                 .build();
 
         PresignedGetObjectRequest presignedRequest = getPresigner().presignGetObject(presignRequest);
-        return toCdnUrl(presignedRequest.url().toString());
+        String originUrl = presignedRequest.url().toString();
+        return usesProviderUrlPolicy() ? originUrl : toCdnUrl(originUrl);
+    }
+
+    private String signManagedGet(String finalKey) {
+        GetObjectRequest request = GetObjectRequest.builder().bucket(properties.getBucket()).key(finalKey).build();
+        GetObjectPresignRequest presign = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofSeconds(properties.getSignGetTtlSeconds())).getObjectRequest(request).build();
+        return getPresigner().presignGetObject(presign).url().toString();
     }
 
     @Override
@@ -103,6 +157,47 @@ public class S3CompatibleStorageService implements ObjectStorageService {
         return new PresignedUpload(signed.url().toString(), key, expireAt);
     }
 
+    @Override
+    public String presignStagingPut(String stagingKey, String contentType, long ttlSeconds) {
+        PutObjectRequest put = PutObjectRequest.builder().bucket(properties.getBucket()).key(stagingKey)
+                .contentType(contentType).build();
+        return getPresigner().presignPutObject(PutObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofSeconds(ttlSeconds)).putObjectRequest(put).build()).url().toString();
+    }
+
+    @Override
+    public FileObjectStorage.StagedMetadata head(String key) {
+        var response = getClient().headObject(HeadObjectRequest.builder().bucket(properties.getBucket()).key(key).build());
+        return new FileObjectStorage.StagedMetadata(response.contentLength(), response.contentType());
+    }
+
+    @Override
+    public FileObjectStorage.StagedMetadata downloadToFile(String key, java.nio.file.Path destination, long maxBytes) {
+        try (var input = getClient().getObject(GetObjectRequest.builder().bucket(properties.getBucket()).key(key).build())) {
+            long declaredLength = input.response().contentLength() == null ? -1L : input.response().contentLength();
+            String contentType = input.response().contentType();
+            try (var output = java.nio.file.Files.newOutputStream(destination)) {
+                byte[] buffer = new byte[64 * 1024];
+                long total = 0;
+                int count;
+                while ((count = input.read(buffer)) >= 0) {
+                    total += count;
+                    if (total > maxBytes) throw new BizException(BizCode.PARAM_INVALID, "文件大小超出限制");
+                    output.write(buffer, 0, count);
+                }
+            }
+            return new FileObjectStorage.StagedMetadata(declaredLength, contentType);
+        } catch (java.io.IOException e) {
+            throw new BizException(BizCode.OP_FAILED, "读取待校验文件失败");
+        }
+    }
+
+    @Override
+    public void putImmutableFile(String key, String contentType, java.nio.file.Path source) {
+        getClient().putObject(PutObjectRequest.builder().bucket(properties.getBucket()).key(key)
+                .contentType(contentType).build(), RequestBody.fromFile(source));
+    }
+
     private S3Presigner getPresigner() {
         if (presigner != null) {
             return presigner;
@@ -113,6 +208,34 @@ public class S3CompatibleStorageService implements ObjectStorageService {
             }
         }
         return presigner;
+    }
+
+    @Override
+    @PreDestroy
+    public synchronized void close() {
+        if (presigner != null) {
+            presigner.close();
+            presigner = null;
+        }
+        if (client != null) {
+            client.close();
+            client = null;
+        }
+    }
+
+    private S3Client getClient() {
+        if (client != null) return client;
+        synchronized (this) {
+            if (client == null) {
+                if (!StringUtils.hasText(properties.getEndpoint())) throw new BizException(BizCode.PARAM_INVALID, "对象存储配置不完整");
+                client = S3Client.builder().endpointOverride(URI.create(properties.getEndpoint()))
+                        .region(Region.of(properties.getRegion()))
+                        .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(properties.getAccessKey(), properties.getSecretKey())))
+                        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(properties.isPathStyle()).build())
+                        .build();
+            }
+        }
+        return client;
     }
 
     private S3Presigner buildPresigner(S3StorageProperties cfg) {
@@ -149,9 +272,8 @@ public class S3CompatibleStorageService implements ObjectStorageService {
     }
 
     /**
-     * 将源站签名 URL 的 host 替换为 CDN host（仅 GET 下载链接）。
-     * 按 DigitalOcean 官方文档：用非 CDN endpoint 生成签名，再把 hostname 换成 CDN hostname。
-     * 签名参数中的 host header 仍是源站，但 CDN 反代时会透传，签名依然有效。
+     * 保留 GENERIC 模式原有的 CDN 替换行为。
+     * RUSTFS / R2 不使用此路径，避免修改签名中的源站 host。
      */
     private String toCdnUrl(String originUrl) {
         String cdn = properties.getCdnEndpoint();
@@ -189,11 +311,28 @@ public class S3CompatibleStorageService implements ObjectStorageService {
         return publicPrefixes.stream().anyMatch(key::startsWith);
     }
 
+    private boolean usesProviderUrlPolicy() {
+        return properties.getProvider() == S3StorageProperties.Provider.RUSTFS
+                || properties.getProvider() == S3StorageProperties.Provider.R2;
+    }
+
     /**
      * 拼接公开读的 CDN URL（无签名）。
-     * path-style: {endpoint}/{bucket}/{key}
+     * GENERIC 保留 {endpoint}/{bucket}/{key}；RUSTFS / R2 使用显式公开对象根地址。
      */
     private String toPublicCdnUrl(String key) {
+        if (usesProviderUrlPolicy()) {
+            // Browsers and proxies normalize these segments to a different object path.
+            // Reject the key rather than changing its meaning by normalizing it here.
+            if (CdnPaths.hasDotSegment(key)) {
+                return null;
+            }
+            String base = properties.getPublicBaseUrl();
+            if (!StringUtils.hasText(base)) {
+                throw new BizException(BizCode.PARAM_INVALID, "对象存储公开访问地址未配置");
+            }
+            return base.replaceAll("/+$", "") + "/" + CdnPaths.encodeKey(key);
+        }
         String base = StringUtils.hasText(properties.getCdnEndpoint())
                 ? properties.getCdnEndpoint()
                 : properties.getEndpoint();

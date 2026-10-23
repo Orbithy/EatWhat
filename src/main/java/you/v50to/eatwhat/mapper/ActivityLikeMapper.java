@@ -6,4 +6,7 @@ import you.v50to.eatwhat.data.po.ActivityLike;
 
 @Mapper
 public interface ActivityLikeMapper extends BaseMapper<ActivityLike> {
+    @org.apache.ibatis.annotations.Update("UPDATE activity_likes SET deleted_at=NULL WHERE id=#{id} AND deleted_at IS NOT NULL")
+    int restore(@org.apache.ibatis.annotations.Param("id") Long id);
+
 }

@@ -15,6 +15,12 @@ import you.v50to.eatwhat.utils.TimestampTypeHandler;
 @NoArgsConstructor
 @TableName(value = "foods", autoResultMap = true)
 public class Food {
+    @com.baomidou.mybatisplus.annotation.TableField(value="catalog_visible",
+        insertStrategy=com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER,
+        updateStrategy=com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Boolean catalogVisible;
+
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -39,6 +45,23 @@ public class Food {
 
     @TableField(value = "picture_url", typeHandler = StringArrayTypeHandler.class)
     private String[] pictureUrl;
+
+    /** 适合的饭点，MealTime 取值，按规范顺序；空数组表示不限。 */
+    @TableField(value = "meal_times", typeHandler = StringArrayTypeHandler.class)
+    private String[] mealTimes;
+
+    /** StageColor 取值；为空时客户端用分类默认色。和 stageAlternates 一起存。 */
+    private String stageColor;
+
+    @TableField(value = "stage_alternates", typeHandler = StringArrayTypeHandler.class)
+    private String[] stageAlternates;
+
+    /** 封面圆形裁切，三个值要么都有要么都没有，见 CoverCropDTO。 */
+    private BigDecimal coverCenterX;
+    private BigDecimal coverCenterY;
+    private BigDecimal coverDiameter;
+
+    private Boolean removeBackground;
 
     private Integer likesCount;
 

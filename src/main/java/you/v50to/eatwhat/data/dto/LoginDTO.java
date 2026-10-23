@@ -18,4 +18,6 @@ public class LoginDTO {
 
     @NotNull(message = "登录端不能为空")
     private DeviceType device;
+
+    @Override public String toString() { return "LoginDTO[redacted]"; }
 }

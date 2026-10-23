@@ -1,6 +1,5 @@
 package you.v50to.eatwhat.controller;
 
-import cn.dev33.satoken.annotation.SaCheckLogin;
 import you.v50to.eatwhat.data.dto.CityDTO;
 import you.v50to.eatwhat.data.dto.ProvinceDTO;
 import you.v50to.eatwhat.data.vo.Result;
@@ -13,7 +12,6 @@ import java.util.List;
 /**
  * 地理位置控制器
  */
-@SaCheckLogin
 @RestController
 @RequestMapping("/api/location")
 @RequiredArgsConstructor

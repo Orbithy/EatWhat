@@ -1,6 +1,5 @@
 package you.v50to.eatwhat.controller;
 
-import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
@@ -11,7 +10,6 @@ import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.HubService;
 
-@SaCheckLogin
 @RestController
 @RequestMapping("/hub")
 public class HubController {

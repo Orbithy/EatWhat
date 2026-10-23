@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import you.v50to.eatwhat.sync.browse.BrowseCommands;
 import you.v50to.eatwhat.data.dto.BrowseHistoryFoodRow;
 import you.v50to.eatwhat.data.dto.BrowseHistoryFoodDTO;
 import you.v50to.eatwhat.data.dto.BrowseHistoryItemDTO;
@@ -32,8 +34,12 @@ public class BrowseHistoryService {
     @Resource
     private ObjectStorageService objectStorageService;
 
+    @Autowired(required = false)
+    private BrowseCommands browseCommands;
+
     public void recordBrowse(Long accountId, String targetType, Long targetId) {
-        browseHistoryMapper.insertIfNotRecent(accountId, targetType, targetId);
+        if (browseCommands != null) browseCommands.record(accountId, targetType, targetId);
+        else browseHistoryMapper.insertIfNotRecent(accountId, targetType, targetId);
     }
 
     public Result<PageResult<BrowseHistoryItemDTO>> getBrowseHistory(Long accountId, BrowseHistoryQueryDTO dto) {

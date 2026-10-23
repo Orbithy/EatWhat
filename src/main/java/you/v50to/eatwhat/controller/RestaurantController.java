@@ -1,6 +1,5 @@
 package you.v50to.eatwhat.controller;
 
-import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
@@ -11,9 +10,9 @@ import you.v50to.eatwhat.data.dto.SearchRestaurantsDTO;
 import you.v50to.eatwhat.data.po.Restaurant;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
+import you.v50to.eatwhat.data.vo.CreatedResourceVO;
 import you.v50to.eatwhat.service.RestaurantService;
 
-@SaCheckLogin
 @RestController
 @RequestMapping("/restaurant")
 public class RestaurantController {
@@ -28,14 +27,23 @@ public class RestaurantController {
 
     @SaCheckRole("verified")
     @PostMapping("/add")
-    public Result<Void> addRestaurant(@Valid @RequestBody RestaurantDTO restaurant) {
+    public Result<CreatedResourceVO> addRestaurant(@Valid @RequestBody RestaurantDTO restaurant) {
         return restaurantService.addRestaurant(restaurant);
     }
 
-    @SaCheckRole("verified")
     @GetMapping("/detail/{id}")
     public Result<Restaurant> getRestaurantDetail(@PathVariable Long id) {
         return restaurantService.getRestaurantDetail(id);
+    }
+
+    /** 无需设备定位的餐厅目录，读取权限与餐厅详情一致（游客可访问）。 */
+    @GetMapping("/browse")
+    public Result<PageResult<Restaurant>> browseRestaurants(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long hubId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return restaurantService.listRestaurants(keyword, hubId, page, pageSize);
     }
 
 // ==================== Admin API ====================
@@ -56,9 +64,10 @@ public class RestaurantController {
     @SaCheckRole("admin")
     public Result<PageResult<Restaurant>> listRestaurants(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long hubId,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
-        return restaurantService.listRestaurants(keyword, page, pageSize);
+        return restaurantService.listRestaurants(keyword, hubId, page, pageSize);
     }
 
 }

@@ -1,0 +1,21 @@
+Port 22
+ListenAddress 0.0.0.0
+HostKey /run/eatwhat-ssh/host_key
+PidFile /run/eatwhat-ssh/sshd.pid
+AuthorizedKeysFile /run/eatwhat-ssh/authorized_keys
+StrictModes yes
+PermitRootLogin yes
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+UsePAM no
+AllowUsers root
+AllowAgentForwarding no
+AllowTcpForwarding no
+GatewayPorts no
+X11Forwarding no
+PermitTunnel no
+PermitTTY no
+PermitUserEnvironment no
+ForceCommand /usr/local/bin/python3 -B /fixture/ssh-exec.py
+LogLevel ERROR

@@ -1,0 +1,13 @@
+{
+  "name": "eatwhat-control-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EatWhat 雙站驗收環境中控前端（靜態 HTML/CSS/ES modules，無第三方依賴）",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/api.test.js tests/state.test.js tests/validate-session-format.test.js tests/static-safety.test.js tests/layout.test.js tests/cluster-api.test.js tests/cluster-state.test.js tests/cluster-static.test.js tests/cluster-leadership.test.js tests/deployment-state.test.js tests/handoff.test.js tests/locale.test.js tests/redesign.test.js tests/servers.test.js tests/health.test.js tests/tasks.test.js tests/roles-recovery.test.js tests/remote-enrollment.test.js tests/privilege.test.js tests/credential-reference.test.js tests/health-ok.test.js tests/handoff-result.test.js tests/preview-execution.test.js tests/cluster-restart-text.test.js tests/member-recovery.test.js tests/controller-jobs.test.js tests/controller-storage.test.js tests/bootstrap.test.js tests/bootstrap-cancel.test.js tests/read-resources.test.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}

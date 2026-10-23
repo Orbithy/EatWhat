@@ -50,7 +50,9 @@ public final class ClusterReplayService implements ClusterNodeAgent.DataPlane {
     });}
     public List<TransportProtocol.EventItem> pull(String recipient){return pull(new Target(recipient));}
     public List<TransportProtocol.EventItem> pull(Target requested){var target=target(requested.targetSite());return ClusterBarrier.internal(()->{
-        var leases=delivery.claimForAggregates(target.siteId(),TransportProtocol.MAX_BATCH,Duration.ofSeconds(60),policy.aggregateTypes());var result=new ArrayList<TransportProtocol.EventItem>();
+        var families=policy.aggregateTypes().stream().filter(type->requested.targetSchemas().containsKey(type)).collect(java.util.stream.Collectors.toSet());
+        if(families.isEmpty())return List.<TransportProtocol.EventItem>of();
+        var leases=delivery.claimForAggregates(target.siteId(),TransportProtocol.MAX_BATCH,Duration.ofSeconds(60),families);var result=new ArrayList<TransportProtocol.EventItem>();
         for(var lease:leases){
             var event=lease.event();try{
                 policy.validate(event,local.identity());

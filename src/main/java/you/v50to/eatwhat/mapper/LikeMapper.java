@@ -10,6 +10,9 @@ import java.util.List;
 
 @Mapper
 public interface LikeMapper extends BaseMapper<LikeRecord> {
+    @org.apache.ibatis.annotations.Update("UPDATE likes SET deleted_at=NULL WHERE id=#{id} AND deleted_at IS NOT NULL")
+    int restore(@org.apache.ibatis.annotations.Param("id") Long id);
+
 
     @Select("""
             <script>

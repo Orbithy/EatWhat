@@ -24,4 +24,11 @@ public class RegisterDTO {
 
     @NotNull(message = "登录端不能为空")
     private DeviceType device;
+
+    private Boolean crossBorderConsent;
+
+    @Size(max = 128, message = "同意政策版本过长")
+    private String consentPolicyVersion;
+
+    @Override public String toString() { return "RegisterDTO[redacted]"; }
 }

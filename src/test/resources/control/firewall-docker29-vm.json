@@ -1,0 +1,1945 @@
+{
+  "scope": "NATIVE_SYNTHETIC_SLEEPING_CONTAINER_RULES_ONLY",
+  "dockerVersion": "29.1.3",
+  "descriptor": {
+    "bridge": "br-081a653e98cc",
+    "subnet": "172.18.0.0/16",
+    "containerIps": [
+      "172.18.0.2",
+      "172.18.0.3",
+      "172.18.0.4"
+    ],
+    "appIp": "172.18.0.4",
+    "httpPort": 18090,
+    "freshDaemon": false,
+    "defaultSubnet": null,
+    "allowForwardPolicyDrop": false
+  },
+  "before": {
+    "ip6tables-save": [
+      "*filter",
+      ":INPUT ACCEPT [0:0]",
+      ":FORWARD ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":DOCKER - [0:0]",
+      ":DOCKER-BRIDGE - [0:0]",
+      ":DOCKER-CT - [0:0]",
+      ":DOCKER-FORWARD - [0:0]",
+      ":DOCKER-INTERNAL - [0:0]",
+      ":DOCKER-USER - [0:0]",
+      "-A FORWARD -j DOCKER-USER",
+      "-A FORWARD -j DOCKER-FORWARD",
+      "-A DOCKER-FORWARD -j DOCKER-CT",
+      "-A DOCKER-FORWARD -j DOCKER-INTERNAL",
+      "-A DOCKER-FORWARD -j DOCKER-BRIDGE",
+      "COMMIT",
+      "*nat",
+      ":PREROUTING ACCEPT [0:0]",
+      ":INPUT ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":POSTROUTING ACCEPT [0:0]",
+      ":DOCKER - [0:0]",
+      "-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER",
+      "-A OUTPUT ! -d ::1/128 -m addrtype --dst-type LOCAL -j DOCKER",
+      "COMMIT"
+    ],
+    "iptables-save": [
+      "*filter",
+      ":INPUT ACCEPT [0:0]",
+      ":FORWARD DROP [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":DOCKER - [0:0]",
+      ":DOCKER-BRIDGE - [0:0]",
+      ":DOCKER-CT - [0:0]",
+      ":DOCKER-FORWARD - [0:0]",
+      ":DOCKER-INTERNAL - [0:0]",
+      ":DOCKER-USER - [0:0]",
+      "-A FORWARD -j DOCKER-USER",
+      "-A FORWARD -j DOCKER-FORWARD",
+      "-A DOCKER ! -i docker0 -o docker0 -j DROP",
+      "-A DOCKER-BRIDGE -o docker0 -j DOCKER",
+      "-A DOCKER-CT -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+      "-A DOCKER-FORWARD -j DOCKER-CT",
+      "-A DOCKER-FORWARD -j DOCKER-INTERNAL",
+      "-A DOCKER-FORWARD -j DOCKER-BRIDGE",
+      "-A DOCKER-FORWARD -i docker0 -j ACCEPT",
+      "COMMIT",
+      "*nat",
+      ":PREROUTING ACCEPT [0:0]",
+      ":INPUT ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":POSTROUTING ACCEPT [0:0]",
+      ":DOCKER - [0:0]",
+      "-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER",
+      "-A OUTPUT ! -d 127.0.0.0/8 -m addrtype --dst-type LOCAL -j DOCKER",
+      "-A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE",
+      "COMMIT"
+    ],
+    "nft": {
+      "nftables": [
+        {
+          "table": {
+            "family": "ip",
+            "name": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER",
+            "table": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "prerouting",
+            "name": "PREROUTING",
+            "policy": "accept",
+            "prio": -100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "output",
+            "name": "OUTPUT",
+            "policy": "accept",
+            "prio": -100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "postrouting",
+            "name": "POSTROUTING",
+            "policy": "accept",
+            "prio": 100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "PREROUTING",
+            "expr": [
+              {
+                "xt": {
+                  "name": "addrtype",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "OUTPUT",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "!=",
+                  "right": {
+                    "prefix": {
+                      "addr": "127.0.0.0",
+                      "len": 8
+                    }
+                  }
+                }
+              },
+              {
+                "xt": {
+                  "name": "addrtype",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "POSTROUTING",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "saddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": {
+                    "prefix": {
+                      "addr": "172.17.0.0",
+                      "len": 16
+                    }
+                  }
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "docker0"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "xt": {
+                  "name": "MASQUERADE",
+                  "type": "target"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "nat"
+          }
+        },
+        {
+          "table": {
+            "family": "ip",
+            "name": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-FORWARD",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-BRIDGE",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-CT",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-INTERNAL",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "forward",
+            "name": "FORWARD",
+            "policy": "drop",
+            "prio": 0,
+            "table": "filter",
+            "type": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-USER",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "docker0"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "docker0"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "drop": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-CT"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-INTERNAL"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-BRIDGE"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "docker0"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "accept": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-BRIDGE",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "docker0"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-CT",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "docker0"
+                }
+              },
+              {
+                "xt": {
+                  "name": "conntrack",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "accept": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-USER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-FORWARD"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "table": {
+            "family": "ip6",
+            "name": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER",
+            "table": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "hook": "prerouting",
+            "name": "PREROUTING",
+            "policy": "accept",
+            "prio": -100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "hook": "output",
+            "name": "OUTPUT",
+            "policy": "accept",
+            "prio": -100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "PREROUTING",
+            "expr": [
+              {
+                "xt": {
+                  "name": "addrtype",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "OUTPUT",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip6"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "::1"
+                }
+              },
+              {
+                "xt": {
+                  "name": "addrtype",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "nat"
+          }
+        },
+        {
+          "table": {
+            "family": "ip6",
+            "name": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-FORWARD",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-BRIDGE",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-CT",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-INTERNAL",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "hook": "forward",
+            "name": "FORWARD",
+            "policy": "accept",
+            "prio": 0,
+            "table": "filter",
+            "type": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-USER",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-CT"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-INTERNAL"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-BRIDGE"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-USER"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-FORWARD"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        }
+      ]
+    }
+  },
+  "after": {
+    "ip6tables-save": [
+      "*filter",
+      ":INPUT ACCEPT [0:0]",
+      ":FORWARD ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":DOCKER - [0:0]",
+      ":DOCKER-BRIDGE - [0:0]",
+      ":DOCKER-CT - [0:0]",
+      ":DOCKER-FORWARD - [0:0]",
+      ":DOCKER-INTERNAL - [0:0]",
+      ":DOCKER-USER - [0:0]",
+      "-A FORWARD -j DOCKER-USER",
+      "-A FORWARD -j DOCKER-FORWARD",
+      "-A DOCKER-FORWARD -j DOCKER-CT",
+      "-A DOCKER-FORWARD -j DOCKER-INTERNAL",
+      "-A DOCKER-FORWARD -j DOCKER-BRIDGE",
+      "COMMIT",
+      "*nat",
+      ":PREROUTING ACCEPT [0:0]",
+      ":INPUT ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":POSTROUTING ACCEPT [0:0]",
+      ":DOCKER - [0:0]",
+      "-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER",
+      "-A OUTPUT ! -d ::1/128 -m addrtype --dst-type LOCAL -j DOCKER",
+      "COMMIT"
+    ],
+    "iptables-save": [
+      "*raw",
+      ":PREROUTING ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      "-A PREROUTING -d 172.18.0.2/32 ! -i br-081a653e98cc -j DROP",
+      "-A PREROUTING -d 172.18.0.3/32 ! -i br-081a653e98cc -j DROP",
+      "-A PREROUTING -d 172.18.0.4/32 ! -i br-081a653e98cc -j DROP",
+      "-A PREROUTING -d 127.0.0.1/32 ! -i lo -p tcp -m tcp --dport 18090 -j DROP",
+      "COMMIT",
+      "*filter",
+      ":INPUT ACCEPT [0:0]",
+      ":FORWARD DROP [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":DOCKER - [0:0]",
+      ":DOCKER-BRIDGE - [0:0]",
+      ":DOCKER-CT - [0:0]",
+      ":DOCKER-FORWARD - [0:0]",
+      ":DOCKER-INTERNAL - [0:0]",
+      ":DOCKER-USER - [0:0]",
+      "-A FORWARD -j DOCKER-USER",
+      "-A FORWARD -j DOCKER-FORWARD",
+      "-A DOCKER -d 172.18.0.4/32 ! -i br-081a653e98cc -o br-081a653e98cc -p tcp -m tcp --dport 8080 -j ACCEPT",
+      "-A DOCKER ! -i docker0 -o docker0 -j DROP",
+      "-A DOCKER ! -i br-081a653e98cc -o br-081a653e98cc -j DROP",
+      "-A DOCKER-BRIDGE -o docker0 -j DOCKER",
+      "-A DOCKER-BRIDGE -o br-081a653e98cc -j DOCKER",
+      "-A DOCKER-CT -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+      "-A DOCKER-CT -o br-081a653e98cc -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+      "-A DOCKER-FORWARD -j DOCKER-CT",
+      "-A DOCKER-FORWARD -j DOCKER-INTERNAL",
+      "-A DOCKER-FORWARD -j DOCKER-BRIDGE",
+      "-A DOCKER-FORWARD -i docker0 -j ACCEPT",
+      "-A DOCKER-FORWARD -i br-081a653e98cc -j ACCEPT",
+      "COMMIT",
+      "*nat",
+      ":PREROUTING ACCEPT [0:0]",
+      ":INPUT ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":POSTROUTING ACCEPT [0:0]",
+      ":DOCKER - [0:0]",
+      "-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER",
+      "-A OUTPUT ! -d 127.0.0.0/8 -m addrtype --dst-type LOCAL -j DOCKER",
+      "-A POSTROUTING -s 172.18.0.0/16 ! -o br-081a653e98cc -j MASQUERADE",
+      "-A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE",
+      "-A DOCKER -d 127.0.0.1/32 ! -i br-081a653e98cc -p tcp -m tcp --dport 18090 -j DNAT --to-destination 172.18.0.4:8080",
+      "COMMIT"
+    ],
+    "nft": {
+      "nftables": [
+        {
+          "table": {
+            "family": "ip",
+            "name": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER",
+            "table": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "prerouting",
+            "name": "PREROUTING",
+            "policy": "accept",
+            "prio": -100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "output",
+            "name": "OUTPUT",
+            "policy": "accept",
+            "prio": -100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "postrouting",
+            "name": "POSTROUTING",
+            "policy": "accept",
+            "prio": 100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": "127.0.0.1"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "dport",
+                      "protocol": "tcp"
+                    }
+                  },
+                  "op": "==",
+                  "right": 18090
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "xt": {
+                  "name": "DNAT",
+                  "type": "target"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "PREROUTING",
+            "expr": [
+              {
+                "xt": {
+                  "name": "addrtype",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "OUTPUT",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "!=",
+                  "right": {
+                    "prefix": {
+                      "addr": "127.0.0.0",
+                      "len": 8
+                    }
+                  }
+                }
+              },
+              {
+                "xt": {
+                  "name": "addrtype",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "POSTROUTING",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "saddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": {
+                    "prefix": {
+                      "addr": "172.18.0.0",
+                      "len": 16
+                    }
+                  }
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "xt": {
+                  "name": "MASQUERADE",
+                  "type": "target"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "POSTROUTING",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "saddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": {
+                    "prefix": {
+                      "addr": "172.17.0.0",
+                      "len": 16
+                    }
+                  }
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "docker0"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "xt": {
+                  "name": "MASQUERADE",
+                  "type": "target"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "nat"
+          }
+        },
+        {
+          "table": {
+            "family": "ip",
+            "name": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-FORWARD",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-BRIDGE",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-CT",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-INTERNAL",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "forward",
+            "name": "FORWARD",
+            "policy": "drop",
+            "prio": 0,
+            "table": "filter",
+            "type": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "name": "DOCKER-USER",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": "172.18.0.4"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "dport",
+                      "protocol": "tcp"
+                    }
+                  },
+                  "op": "==",
+                  "right": 8080
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "accept": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "docker0"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "docker0"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "drop": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "drop": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-CT"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-INTERNAL"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-BRIDGE"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "docker0"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "accept": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "accept": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-BRIDGE",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "docker0"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-BRIDGE",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-CT",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "docker0"
+                }
+              },
+              {
+                "xt": {
+                  "name": "conntrack",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "accept": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-CT",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "oifname"
+                    }
+                  },
+                  "op": "==",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "xt": {
+                  "name": "conntrack",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "accept": null
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-USER"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-FORWARD"
+                }
+              }
+            ],
+            "family": "ip",
+            "table": "filter"
+          }
+        },
+        {
+          "table": {
+            "family": "ip6",
+            "name": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER",
+            "table": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "hook": "prerouting",
+            "name": "PREROUTING",
+            "policy": "accept",
+            "prio": -100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "hook": "output",
+            "name": "OUTPUT",
+            "policy": "accept",
+            "prio": -100,
+            "table": "nat",
+            "type": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "PREROUTING",
+            "expr": [
+              {
+                "xt": {
+                  "name": "addrtype",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "nat"
+          }
+        },
+        {
+          "rule": {
+            "chain": "OUTPUT",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip6"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "::1"
+                }
+              },
+              {
+                "xt": {
+                  "name": "addrtype",
+                  "type": "match"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "nat"
+          }
+        },
+        {
+          "table": {
+            "family": "ip6",
+            "name": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-FORWARD",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-BRIDGE",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-CT",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-INTERNAL",
+            "table": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "hook": "forward",
+            "name": "FORWARD",
+            "policy": "accept",
+            "prio": 0,
+            "table": "filter",
+            "type": "filter"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip6",
+            "name": "DOCKER-USER",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-CT"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-INTERNAL"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "DOCKER-FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-BRIDGE"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-USER"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "FORWARD",
+            "expr": [
+              {
+                "counter": null
+              },
+              {
+                "jump": {
+                  "target": "DOCKER-FORWARD"
+                }
+              }
+            ],
+            "family": "ip6",
+            "table": "filter"
+          }
+        },
+        {
+          "table": {
+            "family": "ip",
+            "name": "raw"
+          }
+        },
+        {
+          "chain": {
+            "family": "ip",
+            "hook": "prerouting",
+            "name": "PREROUTING",
+            "policy": "accept",
+            "prio": -300,
+            "table": "raw",
+            "type": "filter"
+          }
+        },
+        {
+          "rule": {
+            "chain": "PREROUTING",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": "172.18.0.2"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "drop": null
+              }
+            ],
+            "family": "ip",
+            "table": "raw"
+          }
+        },
+        {
+          "rule": {
+            "chain": "PREROUTING",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": "172.18.0.3"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "drop": null
+              }
+            ],
+            "family": "ip",
+            "table": "raw"
+          }
+        },
+        {
+          "rule": {
+            "chain": "PREROUTING",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": "172.18.0.4"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "br-081a653e98cc"
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "drop": null
+              }
+            ],
+            "family": "ip",
+            "table": "raw"
+          }
+        },
+        {
+          "rule": {
+            "chain": "PREROUTING",
+            "expr": [
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "daddr",
+                      "protocol": "ip"
+                    }
+                  },
+                  "op": "==",
+                  "right": "127.0.0.1"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "meta": {
+                      "key": "iifname"
+                    }
+                  },
+                  "op": "!=",
+                  "right": "lo"
+                }
+              },
+              {
+                "match": {
+                  "left": {
+                    "payload": {
+                      "field": "dport",
+                      "protocol": "tcp"
+                    }
+                  },
+                  "op": "==",
+                  "right": 18090
+                }
+              },
+              {
+                "counter": null
+              },
+              {
+                "drop": null
+              }
+            ],
+            "family": "ip",
+            "table": "raw"
+          }
+        }
+      ]
+    }
+  }
+}

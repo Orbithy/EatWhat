@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 public class SearchRestaurantsDTO {
     private String keyword;
+    private Long hubId;
 
     @NotNull
     private Double gcjLng;

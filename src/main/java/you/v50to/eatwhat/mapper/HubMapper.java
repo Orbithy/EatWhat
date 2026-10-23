@@ -16,7 +16,7 @@ public interface HubMapper extends BaseMapper<Hub> {
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
     })
-    @Select("SELECT * FROM hub WHERE id = #{id}")
+    @Select("SELECT * FROM hub WHERE catalog_visible AND id = #{id}")
     Hub selectHubById(@Param("id") Long id);
 
     @Update("""
@@ -40,7 +40,7 @@ public interface HubMapper extends BaseMapper<Hub> {
     @Select("""
             SELECT *
             FROM hub
-            WHERE boundary IS NOT NULL
+            WHERE catalog_visible AND boundary IS NOT NULL
               AND ST_Covers(boundary, ST_SetSRID(ST_MakePoint(#{wgsLng}, #{wgsLat}), 4326))
             LIMIT 1
             """)

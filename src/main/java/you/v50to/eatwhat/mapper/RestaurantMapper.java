@@ -29,8 +29,12 @@ public interface RestaurantMapper extends BaseMapper<Restaurant> {
                    ST_Distance(location, ST_SetSRID(ST_MakePoint(#{wgsLng}, #{wgsLat}), 4326)::geography) AS distance
             FROM restaurant
             <where>
+                catalog_visible
                 <if test="keyword != null and keyword != ''">
-                    name LIKE CONCAT('%', #{keyword}, '%')
+                    AND name LIKE CONCAT('%', #{keyword}, '%')
+                </if>
+                <if test="hubId != null">
+                    AND hub_id = #{hubId}
                 </if>
                 <if test="radius != null">
                     AND ST_DWithin(location,
@@ -42,15 +46,16 @@ public interface RestaurantMapper extends BaseMapper<Restaurant> {
             </script>
             """)
     IPage<Restaurant> searchRestaurants(@Param("keyword") String keyword,
+                                        @Param("hubId") Long hubId,
                                         @Param("wgsLng") double wgsLng,
                                         @Param("wgsLat") double wgsLat,
                                         @Param("radius") Double radius,
                                         IPage<Restaurant> page);
 
-    @Select("SELECT COUNT(*) FROM restaurant")
+    @Select("SELECT COUNT(*) FROM restaurant WHERE catalog_visible")
     Long countTotal();
 
-    @Select("SELECT COUNT(*) FROM restaurant WHERE created_at >= CURRENT_DATE")
+    @Select("SELECT COUNT(*) FROM restaurant WHERE catalog_visible AND created_at >= CURRENT_DATE")
     Long countToday();
 
 }

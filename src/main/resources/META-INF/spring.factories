@@ -1,0 +1,1 @@
+org.springframework.context.ApplicationContextInitializer=you.v50to.eatwhat.config.SiteConfigurationValidator,you.v50to.eatwhat.config.sync.SyncConfigurationValidator,you.v50to.eatwhat.account.config.AccountConfigurationValidator

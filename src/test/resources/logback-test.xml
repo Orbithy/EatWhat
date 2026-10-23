@@ -1,0 +1,7 @@
+<configuration>
+    <!-- Test failures stay local: never load the application's Sentry appender. -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder><pattern>%level %logger{36} - %msg%n</pattern></encoder>
+    </appender>
+    <root level="WARN"><appender-ref ref="CONSOLE"/></root>
+</configuration>

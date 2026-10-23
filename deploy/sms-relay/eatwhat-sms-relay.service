@@ -1,0 +1,28 @@
+[Unit]
+Description=EatWhat Singapore to Aliyun PNVS TLS passthrough
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+ExecStart=/usr/bin/python3 -u -B /opt/eatwhat-sms-relay/relay.py --listen-host 23.149.108.7 --listen-port 39857 --allowed-source 51.79.204.39
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0077
+LimitNOFILE=256
+MemoryMax=96M
+TasksMax=16
+
+[Install]
+WantedBy=multi-user.target

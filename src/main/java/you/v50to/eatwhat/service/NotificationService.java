@@ -1,13 +1,19 @@
 package you.v50to.eatwhat.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import you.v50to.eatwhat.data.dto.NotificationDTO;
+import you.v50to.eatwhat.data.enums.BizCode;
+import you.v50to.eatwhat.data.po.Notification;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.NotificationMapper;
+import you.v50to.eatwhat.config.sync.ManagedDomainWriteGuard;
+import you.v50to.eatwhat.sync.notification.NotificationReadCommands;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
 
 import java.util.List;
@@ -19,6 +25,18 @@ public class NotificationService {
     private NotificationMapper notificationMapper;
     @Resource
     private ObjectStorageService objectStorageService;
+    private NotificationReadCommands notificationReadCommands;
+    private ManagedDomainWriteGuard managedDomainWriteGuard;
+
+    @Autowired(required = false)
+    public void setNotificationReadCommands(NotificationReadCommands notificationReadCommands) {
+        this.notificationReadCommands = notificationReadCommands;
+    }
+
+    @Autowired(required = false)
+    public void setManagedDomainWriteGuard(ManagedDomainWriteGuard managedDomainWriteGuard) {
+        this.managedDomainWriteGuard = managedDomainWriteGuard;
+    }
 
     public Result<PageResult<NotificationDTO>> listMyNotifications(Integer page, Integer pageSize) {
         page = validPage(page);
@@ -43,14 +61,32 @@ public class NotificationService {
     @Transactional
     public Result<Void> markOneAsRead(Long id) {
         Long accountId = StpUtil.getLoginIdAsLong();
-        notificationMapper.markOneAsRead(accountId, id);
+        if (notificationReadCommands == null) {
+            if (managedDomainWriteGuard != null && managedDomainWriteGuard.notificationManaged(accountId)) {
+                if (id != null && notificationMapper.selectCount(new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getAccountId, accountId).eq(Notification::getId, id)
+                        .isNull(Notification::getReadAt)) > 0) {
+                    return Result.fail(BizCode.DATA_SYNC_PENDING);
+                }
+            } else {
+                notificationMapper.markOneAsRead(accountId, id);
+            }
+        } else notificationReadCommands.markOne(accountId, id);
         return Result.ok();
     }
 
     @Transactional
     public Result<Void> markAllAsRead() {
         Long accountId = StpUtil.getLoginIdAsLong();
-        notificationMapper.markAllAsRead(accountId);
+        if (notificationReadCommands == null) {
+            if (managedDomainWriteGuard != null && managedDomainWriteGuard.notificationManaged(accountId)) {
+                if (notificationMapper.countUnreadByAccountId(accountId) > 0) {
+                    return Result.fail(BizCode.DATA_SYNC_PENDING);
+                }
+            } else {
+                notificationMapper.markAllAsRead(accountId);
+            }
+        } else notificationReadCommands.markAll(accountId);
         return Result.ok();
     }
 

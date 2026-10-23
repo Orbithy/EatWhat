@@ -15,6 +15,9 @@ public interface UserMapper extends BaseMapper<User> {
             SELECT
                 u.id,
                 COALESCE(u.display_name, u.nick_name) AS userName,
+                CASE WHEN u.nick_name ~ '^p_[0-9a-f]{12}$' OR u.nick_name LIKE '~mw~%'
+                     THEN NULL ELSE u.nick_name END AS loginUsername,
+                (u.nick_name !~ '^p_[0-9a-f]{12}$' AND u.nick_name NOT LIKE '~mw~%') AS hasUsername,
                 u.avatar,
                 ui.gender,
                 ui.birthday,
@@ -39,6 +42,9 @@ public interface UserMapper extends BaseMapper<User> {
             LIMIT 1
             """)
     UserInfoDTO selectUserInfoById(@Param("userId") Long userId);
+
+    @Select("SELECT id, nick_name AS user_name, password_hash, banned FROM users WHERE id = #{userId} FOR UPDATE")
+    User selectByIdForUpdate(@Param("userId") Long userId);
 
     /**
      * 查询用户获得的总点赞数

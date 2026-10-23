@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark">
+  <title>EatWhat 中控台</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">跳至主要內容</a>
+
+  <div id="shell" class="shell" data-auth="out">
+    <aside id="sidebar" class="sidebar" aria-label="側邊導覽" hidden>
+      <div class="side-top">
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 3c-2 2 2 3 0 5M15 3c-2 2 2 3 0 5"/>
+            <path class="brand-bowl" d="M4 12h16a8 8 0 0 1-16 0Z"/>
+            <path d="M3 12h18M9 21h6"/>
+          </svg>
+          <span class="brand-text">
+            <span class="brand-name">EatWhat 中控台</span>
+            <span id="brand-sub" class="brand-sub" hidden></span>
+          </span>
+          <button type="button" id="nav-close" class="icon-btn only-narrow" aria-label="關閉選單">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <span id="env-chip" class="env-chip" hidden></span>
+      </div>
+        <nav id="app-nav" class="app-nav" aria-label="主導覽">
+          <a href="#/overview" data-route="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg><span>總覽</span><span id="nav-issues" class="nav-badge" hidden></span></a>
+          <p class="nav-label">運維</p>
+          <a href="#/deploy" data-route="deploy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M7 9l5 5 5-5M5 20h14"/></svg><span>部署</span></a>
+          <a href="#/sites" data-route="sites"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3c3.5 3.5 3.5 14.5 0 18M12 3c-3.5 3.5-3.5 14.5 0 18"/></svg><span>站點</span></a>
+          <a href="#/servers" data-route="servers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4zM7.5 7h.5M7.5 17h.5M12 7h5M12 17h5"/></svg><span>伺服器</span></a>
+          <a href="#/control" data-route="control"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3.5v5.5c0 4.8-3.4 8-8 9-4.6-1-8-4.2-8-9V6.5zM9 12l2 2 4-4"/></svg><span>中控</span></a>
+          <a href="#/advanced/gc" data-route="advanced/gc" data-route-group="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4"/></svg><span>進階運維</span></a>
+          <div class="nav-sub" data-route-sub="advanced" hidden>
+            <a href="#/advanced/gc" data-route="advanced/gc">多方 GC</a>
+            <a href="#/advanced/fault" data-route="advanced/fault">故障注入</a>
+            <a href="#/advanced/tasks" data-route="advanced/tasks">驗收任務</a>
+          </div>
+          <p class="nav-label">記錄與帳號</p>
+          <a href="#/audit" data-route="audit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.5M4.5 12h.5M4.5 18h.5"/></svg><span>審計記錄</span></a>
+          <a href="#/tasks" data-route="tasks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18"/></svg><span>任務歷史</span></a>
+          <a href="#/account" data-route="account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8a4 4 0 1 0 0 8M4 21c1-4 4-6 8-6s7 2 8 6"/></svg><span>帳號設定</span></a>
+        </nav>
+      <div class="side-foot">
+        <label id="locale-control" class="locale-control" hidden>
+          <span id="locale-label">介面語言</span>
+          <select id="locale-select" aria-labelledby="locale-label" translate="no">
+            <option value="zh-Hans" lang="zh-Hans">简体中文</option>
+            <option value="zh-Hant" lang="zh-Hant">繁體中文</option>
+          </select>
+        </label>
+        <div class="me">
+          <span class="me-avatar" aria-hidden="true"></span>
+          <span id="me-name" class="me-name" translate="no"></span>
+          <button type="button" id="logout-button" class="btn btn-ghost btn-sm" hidden>登出</button>
+        </div>
+      </div>
+    </aside>
+    <div id="nav-scrim" class="nav-scrim" hidden></div>
+
+    <div class="main-col">
+      <header id="appbar" class="appbar" hidden>
+        <button type="button" id="nav-toggle" class="icon-btn only-narrow" aria-label="開啟選單" aria-controls="sidebar" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <span class="appbar-brand only-narrow"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 3c-2 2 2 3 0 5M15 3c-2 2 2 3 0 5"/>
+            <path class="brand-bowl" d="M4 12h16a8 8 0 0 1-16 0Z"/>
+            <path d="M3 12h18M9 21h6"/>
+          </svg></span>
+        <span id="page-title" class="page-title"></span>
+        <p id="connection" class="connection" role="status" aria-live="polite" data-level="OFF">
+          <span class="dot" aria-hidden="true"></span><span class="conn-text">未登入</span>
+        </p>
+        <button type="button" id="refresh-button" class="btn btn-ghost btn-sm" hidden>重新讀取</button>
+      </header>
+
+      <main id="main" tabindex="-1">
+        <!-- 登入 -->
+        <section id="login-view" class="login" aria-labelledby="login-title">
+          <form id="login-form" class="login-card" method="post" novalidate autocomplete="on">
+            <div class="login-head">
+              <svg class="brand-mark brand-mark-lg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 3c-2 2 2 3 0 5M15 3c-2 2 2 3 0 5"/>
+            <path class="brand-bowl" d="M4 12h16a8 8 0 0 1-16 0Z"/>
+            <path d="M3 12h18M9 21h6"/>
+          </svg>
+              <h1 id="login-title">管理員登入</h1>
+            </div>
+            <label class="field">
+              <span class="field-label">帳號</span>
+              <input id="login-username" name="username" type="text" autocomplete="username" required maxlength="128" spellcheck="false" translate="no">
+            </label>
+            <label class="field">
+              <span class="field-label">密碼</span>
+              <input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="256">
+            </label>
+            <button type="submit" id="login-submit" class="btn btn-primary btn-block">登入</button>
+            <p id="login-error" class="message message-red" role="alert" hidden></p>
+          </form>
+        </section>
+
+    <!-- 雙站相容模式（CONTROL_MODE = legacy） -->
+    <div id="console-view" class="console" hidden>
+      <div id="stale-banner" class="banner" role="alert" hidden></div>
+      <p id="notice" class="message" role="status" aria-live="polite" hidden></p>
+      <section class="page" data-page="overview" aria-label="總覽" hidden>
+        <header class="page-head"><h1>總覽</h1></header>
+        <section class="overview-wrap" aria-label="狀態總覽">
+          <ul id="overview" class="overview"></ul>
+        </section>
+      </section>
+      <section class="page" data-page="deploy" aria-label="部署" hidden>
+        <header class="page-head"><h1>部署</h1></header>
+        <section id="sec-deploy" class="panel" aria-labelledby="deploy-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="deploy-title">版本與部署</h2>
+                  </div>
+                  <p class="panel-sub">只能選擇伺服器登記的制品；伺服器會重新讀取制品校驗 SHA-256。</p>
+                </header>
+                <div class="split split-tight">
+                  <form id="plan-form" class="form" novalidate>
+                    <label class="field">
+                      <span class="field-label">制品 releaseId</span>
+                      <select id="release-select" name="releaseId"></select>
+                    </label>
+                    <div id="release-details"></div>
+                    <fieldset class="field segmented">
+                      <legend class="field-label">目標站點</legend>
+                      <label class="seg-option"><input type="checkbox" name="plan-site" value="campus" checked><span>campus</span></label>
+                      <label class="seg-option"><input type="checkbox" name="plan-site" value="external" checked><span>external</span></label>
+                    </fieldset>
+                    <div class="form-actions">
+                      <button type="submit" id="plan-create" class="btn btn-primary">建立預覽計畫</button>
+                      <button type="button" id="plan-reload" class="btn btn-ghost" disabled>重新讀取計畫</button>
+                    </div>
+                  </form>
+                  <div class="lock-box">
+                    <h3 id="lock-title" class="sub-title">部署執行</h3>
+                    <button type="button" id="deploy-execute" class="btn btn-locked btn-block" disabled aria-disabled="true" aria-describedby="lock-reasons">執行部署（等待條件核對）</button>
+                    <ul id="lock-reasons" class="list list-amber"></ul>
+                  </div>
+                </div>
+                <div id="plan-view" class="plan-view"></div>
+              </section>
+      </section>
+      <section class="page" data-page="sites" aria-label="站點" hidden>
+        <header class="page-head"><h1>站點</h1></header>
+        <section id="sec-sites" class="panel" aria-labelledby="sites-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="sites-title">兩站即時觀測</h2>
+                  </div>
+                  <p class="panel-sub">讀取失敗或過期即標示失效，不沿用為在線。OBSERVED 不等於健康。</p>
+                </header>
+                <div id="pair-bar" class="pair-bar"></div>
+                <div id="site-grid" class="site-grid"></div>
+              </section>
+      </section>
+      <section class="page" data-page="control" aria-label="中控" hidden>
+        <header class="page-head"><h1>中控</h1><p>雙站相容模式沒有主備租約與手動切主；以下為環境能力。</p></header>
+        <details id="sec-capabilities" class="panel panel-collapsible">
+                <summary class="panel-summary">
+                  <span class="panel-summary-title">環境與能力</span>
+                  <span id="cap-summary" class="badge-line"></span>
+                </summary>
+                <div id="capabilities" class="stack"></div>
+              </details>
+      </section>
+      <nav class="tabs" data-route-sub="advanced" aria-label="進階運維分頁" hidden>
+        <a href="#/advanced/gc" data-route="advanced/gc">多方 GC</a>
+        <a href="#/advanced/fault" data-route="advanced/fault">故障注入</a>
+        <a href="#/advanced/tasks" data-route="advanced/tasks">驗收任務</a>
+      </nav>
+      <section class="page" data-page="advanced/gc" aria-label="進階運維" hidden>
+        <header class="page-head"><h1>進階運維</h1></header>
+        <section id="sec-gc" class="panel" aria-labelledby="gc-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="gc-title">GC 協調操作對照</h2>
+                  </div>
+                  <p class="panel-sub">只並列 API 回傳的識別碼與狀態；peer_deleted 等為回報值，不推導物件已實體刪除。未出現在某站清單不代表該站沒有此操作。</p>
+                </header>
+                <div id="gc" class="stack"></div>
+              </section>
+      </section>
+      <section class="page" data-page="advanced/fault" aria-label="進階運維" hidden>
+        <header class="page-head"><h1>進階運維</h1></header>
+        <section id="sec-faults" class="panel" aria-labelledby="faults-title">
+                  <header class="panel-head">
+                    <div class="panel-heading">
+                      <h2 id="faults-title">通道 BLOCK / RESTORE</h2>
+                    </div>
+                    <p class="panel-sub">BLOCK 關閉既有測試連線並拒絕新連線，到期自動放行，不改變 GC 凍結狀態。RESTORE 立即恢復，資料庫不可達時仍可執行。</p>
+                  </header>
+                  <form id="fault-form" class="form" novalidate>
+                    <div class="form-row">
+                      <label class="field">
+                        <span class="field-label">站點</span>
+                        <select id="fault-site" name="site">
+                          <option value="campus">校內站 campus</option>
+                          <option value="external">校外站 external</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span class="field-label">通道</span>
+                        <select id="fault-channel" name="channel"></select>
+                      </label>
+                    </div>
+                    <fieldset class="field segmented">
+                      <legend class="field-label">動作</legend>
+                      <label class="seg-option"><input type="radio" name="fault-action" value="BLOCK" checked><span>BLOCK 阻斷</span></label>
+                      <label class="seg-option"><input type="radio" name="fault-action" value="RESTORE"><span>RESTORE 恢復</span></label>
+                    </fieldset>
+                    <label class="field">
+                      <span class="field-label">BLOCK 持續秒數（1–300，且不得超過通道節點上限）</span>
+                      <input id="fault-seconds" name="seconds" type="number" inputmode="numeric" min="1" max="300" step="1" value="30" required aria-describedby="fault-limit">
+                    </label>
+                    <p id="fault-limit" class="note note-neutral"></p>
+                    <div class="callout">
+                      <p id="fault-impact" class="note note-neutral"></p>
+                      <ul id="fault-blocking" class="list list-red" hidden></ul>
+                      <ul id="fault-warnings" class="list list-amber" hidden></ul>
+                    </div>
+                    <div class="form-actions">
+                      <button type="submit" id="fault-submit" class="btn btn-warn">檢查並確認…</button>
+                    </div>
+                  </form>
+                  <div id="fault-result" class="message" role="status" aria-live="polite" hidden></div>
+                </section>
+      </section>
+      <section class="page" data-page="advanced/tasks" aria-label="進階運維" hidden>
+        <header class="page-head"><h1>進階運維</h1></header>
+        <section id="sec-runs" class="panel" aria-labelledby="runs-title">
+                  <header class="panel-head">
+                    <div class="panel-heading">
+                      <h2 id="runs-title">驗收任務</h2>
+                    </div>
+                    <p class="panel-sub">COMMAND_SUCCEEDED 只代表 Maven 退出碼 0，不代表遠端驗收通過。</p>
+                  </header>
+                  <div class="active-block">
+                    <h3 class="sub-title">目前任務</h3>
+                    <div id="active-run" class="active-run"></div>
+                    <div class="form-actions">
+                      <button type="button" id="run-cancel" class="btn btn-ghost btn-sm" disabled>取消目前任務…</button>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 class="sub-title">可執行套件</h3>
+                    <div id="suite-status"></div>
+                    <ul id="suite-list" class="suite-list"></ul>
+                  </div>
+                  <details class="disclosure">
+                    <summary><span class="disclosure-title">依 ID 查詢歷史任務</span></summary>
+                    <div class="disclosure-body">
+                      <form id="run-lookup-form" class="form inline-form" novalidate>
+                        <label class="field">
+                          <span class="field-label">任務 ID（UUID）</span>
+                          <input id="run-lookup-id" type="text" autocomplete="off" spellcheck="false" maxlength="36" pattern="[0-9a-fA-F-]{36}">
+                        </label>
+                        <button type="submit" id="run-lookup-submit" class="btn btn-ghost">查詢</button>
+                      </form>
+                    </div>
+                  </details>
+                </section>
+        <section class="panel" aria-labelledby="history-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="history-title">任務紀錄</h2>
+                  </div>
+                </header>
+                <div id="run-history" class="stack"></div>
+              </section>
+      </section>
+      <section class="page" data-page="audit" aria-label="審計記錄" hidden>
+        <header class="page-head"><h1>審計記錄</h1></header>
+        <section id="sec-audit" class="panel" aria-labelledby="audit-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="audit-title">操作稽核</h2>
+                  </div>
+                  <label class="field field-inline">
+                    <span class="field-label">筆數</span>
+                    <select id="audit-limit">
+                      <option value="20">20</option>
+                      <option value="50" selected>50</option>
+                      <option value="100">100</option>
+                      <option value="200">200</option>
+                    </select>
+                  </label>
+                </header>
+                <div id="audit" class="stack"></div>
+              </section>
+      </section>
+    </div>
+
+    <!-- 多站叢集中控（CONTROL_MODE = cluster） -->
+    <div id="cluster-view" class="console" hidden>
+      <div id="cl-banner" class="banner" role="alert" hidden></div>
+      <p id="cl-notice" class="message" role="status" aria-live="polite" hidden></p>
+      <section class="page" data-page="overview" aria-label="總覽" hidden>
+        <header class="page-head"><h1>總覽</h1></header>
+        <div id="cl-overview" class="home"></div>
+      </section>
+      <section class="page" data-page="deploy" aria-label="部署" hidden>
+        <header class="page-head"><h1>部署</h1></header>
+        <section id="cl-deploy-guide" class="guide" aria-labelledby="cl-deploy-guide-title" hidden>
+          <span class="guide-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h16v6H4zM7.5 7h.5M7.5 17h.5M12 7h5M12 17h5"/></svg></span>
+          <h2 id="cl-deploy-guide-title">還沒有可部署的站點</h2>
+          <p>部署對象是已加入多站集群的站點。新伺服器請先在中控登記 SSH 連線、核對主機指紋並連線檢測，再建立首次安裝計畫。</p>
+          <ol class="guide-steps">
+            <li><span><b>添加 SSH 伺服器</b>：遠端主機，或與中控同一台（選「中控本機」）。</span></li>
+            <li><span><b>核對主機指紋</b>：確認連到的是正確的伺服器。</span></li>
+            <li><span><b>連線檢測</b>：Linux、Python 3.10+、Docker Compose v2、root 與 Docker 權限。</span></li>
+            <li><span><b>首次安裝</b>：建立計畫並確認，安裝業務後端、PostgreSQL、Redis，使用既有 RustFS。</span></li>
+            <li><span><b>加入多站集群</b>：安裝後是獨立業務站；加入需另外配置資料面與加入協議。</span></li>
+          </ol>
+          <p class="guide-actions"><a class="btn btn-primary" href="#/servers">添加 SSH 伺服器</a></p>
+        </section>
+        <section id="cl-sec-deploy" class="panel" aria-labelledby="cl-deploy-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="cl-deploy-title">逐站部署</h2>
+                  </div>
+                  <p class="panel-sub">預覽綁定制品 SHA、目前 epoch 與精確成員 UUID；epoch 變更後預覽即過期。</p>
+                </header>
+                <div class="split split-tight">
+                  <form id="cl-plan-form" class="form" novalidate>
+                    <label class="field">
+                      <span class="field-label">制品 releaseId</span>
+                      <select id="cl-release-select" name="releaseId"></select>
+                    </label>
+                    <div id="cl-release-details"></div>
+                    <fieldset class="field segmented">
+                      <legend class="field-label">目標站點（ACTIVE 成員，最多 16）</legend>
+                      <div id="cl-plan-sites" class="badge-line"></div>
+                    </fieldset>
+                    <ul id="cl-plan-reasons" class="list list-amber" hidden></ul>
+                    <div class="form-actions">
+                      <button type="submit" id="cl-plan-create" class="btn btn-primary">建立預覽…</button>
+                      <button type="button" id="cl-plan-reload" class="btn btn-ghost" disabled>重新讀取預覽</button>
+                    </div>
+                    <div id="cl-plan-result" class="message" role="status" aria-live="polite" hidden></div>
+                  </form>
+                  <div class="lock-box">
+                    <h3 class="sub-title">部署執行</h3>
+                    <button type="button" id="cl-deploy-execute" class="btn btn-locked btn-block" disabled aria-disabled="true" aria-describedby="cl-lock-reasons">執行部署（等待條件核對）</button>
+                    <ul id="cl-lock-reasons" class="list list-amber"></ul>
+                  </div>
+                </div>
+                <div id="cl-plan-view" class="plan-view"></div>
+              </section>
+      </section>
+      <section class="page" data-page="sites" aria-label="站點" hidden>
+        <header class="page-head"><h1>站點</h1></header>
+        <section id="cl-sec-members" class="panel" aria-labelledby="cl-members-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="cl-members-title">叢集成員</h2>
+                  </div>
+                  <p class="panel-sub">名單以叢集狀態為準；缺少觀測顯示「未觀測」，不補成在線或零積壓。可達只代表節點能回應，不等於健康。</p>
+                </header>
+                <div id="cl-members" class="stack"></div>
+              </section>
+        <details class="disclosure" data-key="cl-cluster-facts">
+          <summary><span class="disclosure-title">叢集技術資訊</span></summary>
+          <div class="disclosure-body"><dl class="kv"><dt>成員 epoch</dt><dd id="cl-epoch" class="mono" translate="no">—</dd><dt>clusterId</dt><dd id="cl-cluster-id" class="mono" translate="no">—</dd></dl></div>
+        </details>
+        <section id="cl-sec-changes" class="panel" aria-labelledby="cl-changes-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="cl-changes-title">加入、排空與退役</h2>
+                  </div>
+                  <p class="panel-sub">每次只能有一個未 APPLIED 的成員變更。寫入帶目前 epoch 與冪等 requestId；後端條件不可由中控豁免，不提供強制移除或加入後取消。</p>
+                </header>
+
+                <div class="split">
+                  <form id="cl-member-form" class="form" novalidate>
+                    <h3 class="sub-title">成員操作</h3>
+                    <label class="field">
+                      <span class="field-label">站點</span>
+                      <select id="cl-member-site" name="site"></select>
+                    </label>
+                    <fieldset class="field segmented">
+                      <legend class="field-label">動作</legend>
+                      <label class="seg-option"><input type="radio" name="cl-member-action" value="JOIN" checked><span>加入</span></label>
+                      <label class="seg-option"><input type="radio" name="cl-member-action" value="RETIRE"><span>退役</span></label>
+                      <label class="seg-option"><input type="radio" name="cl-member-action" value="CANCEL"><span>取消登記</span></label>
+                    </fieldset>
+                    <div class="callout">
+                      <p id="cl-member-impact" class="note note-neutral"></p>
+                      <ul id="cl-member-blocking" class="list list-red" hidden></ul>
+                      <ul id="cl-member-warnings" class="list list-amber" hidden></ul>
+                    </div>
+                    <div class="form-actions">
+                      <button type="submit" id="cl-member-submit" class="btn btn-warn">檢查並確認…</button>
+                    </div>
+                    <div id="cl-member-result" class="message" role="status" aria-live="polite" hidden></div>
+                  </form>
+
+                  <form id="cl-register-form" class="form" novalidate>
+                    <h3 class="sub-title">登記新站（伺服器 inventory）</h3>
+                    <label class="field">
+                      <span class="field-label">profile</span>
+                      <select id="cl-profile-select" name="profileId"></select>
+                    </label>
+                    <div id="cl-profile-details"></div>
+                    <div class="form-actions">
+                      <button type="submit" id="cl-register-submit" class="btn btn-primary">登記…</button>
+                      <button type="button" id="cl-profiles-reload" class="btn btn-ghost">重讀 inventory…</button>
+                    </div>
+                    <div id="cl-register-result" class="message" role="status" aria-live="polite" hidden></div>
+                  </form>
+                </div>
+
+                <div class="stack">
+                  <h3 class="sub-title">進行中的變更</h3>
+                  <div id="cl-changes-pending" class="stack"></div>
+                  <form id="cl-resume-form" class="form inline-form" novalidate>
+                    <label class="field">
+                      <span class="field-label">續行未完成變更</span>
+                      <select id="cl-resume-change"></select>
+                    </label>
+                    <button type="submit" id="cl-resume-submit" class="btn btn-ghost">續行…</button>
+                  </form>
+                  <ul id="cl-resume-hint" class="list list-amber" hidden></ul>
+                  <div id="cl-resume-result" class="message" role="status" aria-live="polite" hidden></div>
+                </div>
+
+                <details class="disclosure" data-key="cl-recent-changes">
+                  <summary><span class="disclosure-title">最近變更（後端建立時間倒序）</span></summary>
+                  <div class="disclosure-body"><div id="cl-changes-recent" class="stack"></div></div>
+                </details>
+              </section>
+      </section>
+      <section class="page" data-page="control" aria-label="中控" hidden>
+        <header class="page-head"><h1>中控</h1></header>
+        <section id="cl-leadership" class="leader-bar" aria-label="控制領導狀態"></section>
+        <section id="cl-handoff" class="panel" aria-labelledby="cl-handoff-title" hidden>
+                <header class="panel-head"><div class="panel-heading"><h2 id="cl-handoff-title">切換主中控</h2><p>等待目前部署完成後交接；備機入口也可由管理員提出請求。</p></div></header>
+                <p id="cl-handoff-status" class="message" role="status" aria-live="polite"></p>
+                <form id="cl-handoff-form" class="form-row">
+                  <label class="field"><span class="field-label">接管中控</span><select id="cl-handoff-target" required></select></label>
+                  <button id="cl-handoff-submit" class="btn btn-primary" type="submit" disabled>確認交接…</button>
+                  <button id="cl-handoff-cancel" class="btn btn-ghost" type="button" disabled>取消等待中的交接</button>
+                </form>
+                <p id="cl-handoff-result" class="message" role="status" aria-live="polite" hidden></p>
+              </section>
+        <details id="cl-sec-capabilities" class="panel panel-collapsible">
+                <summary class="panel-summary">
+                  <span class="panel-summary-title">叢集能力</span>
+                  <span id="cl-cap-summary" class="badge-line"></span>
+                </summary>
+                <div id="cl-capabilities" class="stack"></div>
+              </details>
+      </section>
+      <nav class="tabs" data-route-sub="advanced" aria-label="進階運維分頁" hidden>
+        <a href="#/advanced/gc" data-route="advanced/gc">多方 GC</a>
+        <a href="#/advanced/fault" data-route="advanced/fault">故障注入</a>
+        <a href="#/advanced/tasks" data-route="advanced/tasks">驗收任務</a>
+      </nav>
+      <section class="page" data-page="advanced/gc" aria-label="進階運維" hidden>
+        <header class="page-head"><h1>進階運維</h1></header>
+        <section id="cl-sec-gc" class="panel" aria-labelledby="cl-gc-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="cl-gc-title">多方 GC</h2>
+                  </div>
+                  <p class="panel-sub">只能從權威站已發現的 ELIGIBLE 候選發起；沒有任意 key、bucket 或跳過確認選項。證據由後端收集，瀏覽器不能提交 vote。</p>
+                </header>
+                <div class="split">
+                  <div class="stack">
+                    <h3 class="sub-title">候選（UNREFERENCED_REVISION）</h3>
+                    <div id="cl-gc-candidates" class="stack"></div>
+                    <form id="cl-gc-begin-form" class="form inline-form" novalidate>
+                      <label class="field">
+                        <span class="field-label">發起 GC 的候選</span>
+                        <select id="cl-gc-candidate"></select>
+                      </label>
+                      <button type="submit" id="cl-gc-begin-submit" class="btn btn-warn">發起…</button>
+                    </form>
+                    <ul id="cl-gc-begin-reasons" class="list list-amber" hidden></ul>
+                  </div>
+                  <div class="stack">
+                    <div class="panel-head">
+                      <h3 class="sub-title">決策進度</h3>
+                      <label class="seg-option"><input type="checkbox" id="cl-gc-pending-only" checked><span>只看未完成</span></label>
+                    </div>
+                    <form id="cl-gc-resume-form" class="form inline-form" novalidate>
+                      <label class="field">
+                        <span class="field-label">續行未完成決策</span>
+                        <select id="cl-gc-resume-select"></select>
+                      </label>
+                      <button type="submit" id="cl-gc-resume-submit" class="btn btn-ghost">續行…</button>
+                    </form>
+                    <ul id="cl-gc-resume-hint" class="list list-amber" hidden></ul>
+                  </div>
+                </div>
+                <div id="cl-gc-result" class="message" role="status" aria-live="polite" hidden></div>
+                <div id="cl-gc-list" class="stack"></div>
+              </section>
+      </section>
+      <section class="page" data-page="advanced/fault" aria-label="進階運維" hidden>
+        <header class="page-head"><h1>進階運維</h1></header>
+        <section id="cl-sec-faults" class="panel" aria-labelledby="cl-faults-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="cl-faults-title">通道 BLOCK / RESTORE</h2>
+                  </div>
+                  <p class="panel-sub">BLOCK 僅限 ACTIVE，且需 30 秒內開始的成功觀測。RESTORE 可對任何保留身份且 profile 匹配的站（含 RETIRED），只恢復固定代理，不恢復成員資格。</p>
+                </header>
+                <form id="cl-fault-form" class="form" novalidate>
+                  <div class="form-row">
+                    <label class="field">
+                      <span class="field-label">站點</span>
+                      <select id="cl-fault-site" name="site"></select>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">通道</span>
+                      <select id="cl-fault-channel" name="channel"></select>
+                    </label>
+                  </div>
+                  <fieldset class="field segmented">
+                    <legend class="field-label">動作</legend>
+                    <label class="seg-option"><input type="radio" name="cl-fault-action" value="BLOCK" checked><span>BLOCK 阻斷</span></label>
+                    <label class="seg-option"><input type="radio" name="cl-fault-action" value="RESTORE"><span>RESTORE 恢復</span></label>
+                  </fieldset>
+                  <label class="field">
+                    <span class="field-label">BLOCK 持續秒數（1–300，且不得超過通道節點上限）</span>
+                    <input id="cl-fault-seconds" name="seconds" type="number" inputmode="numeric" min="1" max="300" step="1" value="30" required aria-describedby="cl-fault-limit">
+                  </label>
+                  <p id="cl-fault-limit" class="note note-neutral"></p>
+                  <div class="callout">
+                    <p id="cl-fault-impact" class="note note-neutral"></p>
+                    <ul id="cl-fault-blocking" class="list list-red" hidden></ul>
+                    <ul id="cl-fault-warnings" class="list list-amber" hidden></ul>
+                  </div>
+                  <div class="form-actions">
+                    <button type="submit" id="cl-fault-submit" class="btn btn-warn">檢查並確認…</button>
+                  </div>
+                </form>
+                <div id="cl-fault-result" class="message" role="status" aria-live="polite" hidden></div>
+              </section>
+      </section>
+      <section class="page" data-page="advanced/tasks" aria-label="進階運維" hidden>
+        <header class="page-head"><h1>進階運維</h1></header>
+        <section id="cl-sec-runs" class="panel" aria-labelledby="cl-runs-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="cl-runs-title">驗收任務</h2>
+                  </div>
+                  <p class="panel-sub">只能執行伺服器 /test-suites 回傳且屬於 business／coordinated-gc／full-verify 的已啟用套件，不接受任何命令、參數、路徑或 URL。runner 只執行已配置的套件，不代表任意多站故障矩陣；COMMAND_SUCCEEDED 只代表 Maven 退出碼 0，不代表遠端驗收通過。</p>
+                </header>
+                <div class="split">
+                  <div class="active-block">
+                    <h3 class="sub-title">目前任務</h3>
+                    <div id="cl-active-run" class="active-run"></div>
+                    <div class="form-actions">
+                      <button type="button" id="cl-run-cancel" class="btn btn-ghost btn-sm" disabled>取消目前任務…</button>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 class="sub-title">可執行套件</h3>
+                    <div id="cl-suite-status"></div>
+                    <ul id="cl-suite-list" class="suite-list"></ul>
+                  </div>
+                </div>
+                <div id="cl-run-result" class="message" role="status" aria-live="polite" hidden></div>
+                <details class="disclosure">
+                  <summary><span class="disclosure-title">依 ID 查詢歷史任務</span></summary>
+                  <div class="disclosure-body">
+                    <form id="cl-run-lookup-form" class="form inline-form" novalidate>
+                      <label class="field">
+                        <span class="field-label">任務 ID（UUID）</span>
+                        <input id="cl-run-lookup-id" type="text" autocomplete="off" spellcheck="false" maxlength="36" pattern="[0-9a-fA-F-]{36}">
+                      </label>
+                      <button type="submit" id="cl-run-lookup-submit" class="btn btn-ghost">查詢</button>
+                    </form>
+                  </div>
+                </details>
+                <h3 class="sub-title">任務紀錄（目前任務與本機持久歷史）</h3>
+                <div id="cl-run-history" class="stack"></div>
+              </section>
+      </section>
+      <section class="page" data-page="audit" aria-label="審計記錄" hidden>
+        <header class="page-head"><h1>審計記錄</h1></header>
+        <section id="cl-sec-audit" class="panel" aria-labelledby="cl-audit-title">
+                <header class="panel-head">
+                  <div class="panel-heading">
+                    <h2 id="cl-audit-title">操作稽核</h2>
+                  </div>
+                  <label class="field field-inline">
+                    <span class="field-label">筆數</span>
+                    <select id="cl-audit-limit">
+                      <option value="20">20</option>
+                      <option value="50" selected>50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </label>
+                </header>
+                <div class="split">
+                  <div class="stack">
+                    <h3 class="sub-title">成員／GC（資料庫稽核）</h3>
+                    <div id="cl-audit" class="stack"></div>
+                  </div>
+                  <div class="stack">
+                    <h3 class="sub-title">故障／預覽／任務（檔案稽核）</h3>
+                    <div id="cl-file-audit" class="stack"></div>
+                  </div>
+                </div>
+              </section>
+      </section>
+    </div>
+
+    <!-- 帳號設定（兩種模式共用） -->
+    <div id="servers-view" class="console" hidden>
+      <section id="page-servers" class="page" data-page="servers" aria-label="伺服器" hidden>
+        <div class="page-head-row">
+          <header class="page-head"><h1>伺服器</h1><p>登記中控可經由 SSH 連線的伺服器，用於首次安裝與版本更新。</p></header>
+          <div class="form-actions">
+            <button type="button" id="bootstrap-open" class="btn btn-ghost">在新伺服器安裝中控與業務…</button>
+            <button type="button" id="server-add" class="btn btn-primary" disabled>添加 SSH 伺服器</button>
+          </div>
+        </div>
+        <section id="bootstrap-panel" class="panel" aria-labelledby="bootstrap-title" hidden>
+          <header class="panel-head"><h2 id="bootstrap-title">在新伺服器安裝中控與業務</h2></header>
+          <p class="hint">由現有的來源中控（任何已登記的伺服器；沒有安裝器記錄也可以，後端會以實際運行的服務與權威資料庫核對身份），在空的目標伺服器一次安裝中控與業務並加入集群。先建立真實預覽，逐項確認權限後才批准；批准後在背景執行。原有的單獨業務安裝仍在各伺服器卡片上。</p>
+          <p id="bootstrap-status" class="message message-neutral" role="status" aria-live="polite"></p>
+          <form id="bootstrap-form" class="form bootstrap-form" novalidate autocomplete="off">
+            <fieldset class="bootstrap-step">
+              <legend>1 · 伺服器與版本</legend>
+              <div class="bootstrap-grid">
+                <label class="field"><span class="field-label">現有來源中控（後端會實際核對權威身份）</span><select id="bootstrap-source" translate="no"></select></label>
+                <label class="field"><span class="field-label">空的目標伺服器</span><select id="bootstrap-target" translate="no"></select></label>
+                <label class="field"><span class="field-label">業務版本</span><select id="bootstrap-release" translate="no"></select></label>
+                <label class="field"><span class="field-label">分配槽位（1–1023）</span><input id="bootstrap-slot" type="text" inputmode="numeric" maxlength="4" autocomplete="off" translate="no"></label>
+              </div>
+            </fieldset>
+            <fieldset class="bootstrap-step">
+              <legend>2 · 私網與入口</legend>
+              <div class="bootstrap-grid">
+                <label class="field"><span class="field-label">來源私網地址</span><input id="bootstrap-source-address" type="text" maxlength="15" spellcheck="false" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">目標私網地址</span><input id="bootstrap-target-address" type="text" maxlength="15" spellcheck="false" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">目標 WireGuard 入口主機</span><input id="bootstrap-endpoint" type="text" maxlength="253" spellcheck="false" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">WireGuard 端口</span><input id="bootstrap-wg-port" type="text" inputmode="numeric" maxlength="5" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">業務端口</span><input id="bootstrap-http-port" type="text" inputmode="numeric" maxlength="5" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">業務網址（含 /api）</span><input id="bootstrap-app-url" type="text" maxlength="512" spellcheck="false" autocomplete="off" translate="no"></label>
+              </div>
+              <p class="field-help">請填你規劃的值：私網地址需為 10.x、172.16–31.x 或 192.168.x；入口主機只填網域或 IP（不含端口）。頁面不會探測或預填這些值，後端預覽時會再核對。</p>
+            </fieldset>
+            <fieldset class="bootstrap-step">
+              <legend>3 · 目標物件儲存</legend>
+              <div class="choice-grid">
+                <label class="choice"><input type="radio" name="bootstrap-storage" value="SOURCE" checked><b>沿用來源站設定</b><small>封存來源目前的儲存設定，不需輸入密鑰。</small></label>
+                <label class="choice"><input type="radio" name="bootstrap-storage" value="CUSTOM"><b>目標站自訂</b><small>通用 S3、RustFS 或 Cloudflare R2。</small></label>
+              </div>
+              <div id="bootstrap-storage-custom" class="bootstrap-grid" hidden>
+                <label class="field"><span class="field-label">提供者</span><select id="bootstrap-provider"><option value="GENERIC">通用 S3</option><option value="RUSTFS">RustFS</option><option value="R2">Cloudflare R2</option></select></label>
+                <label class="field"><span class="field-label">S3 API 地址</span><input id="bootstrap-s3-endpoint" type="text" maxlength="2048" spellcheck="false" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">區域</span><input id="bootstrap-region" type="text" maxlength="128" spellcheck="false" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">桶</span><input id="bootstrap-bucket" type="text" maxlength="128" spellcheck="false" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">Access Key</span><input id="bootstrap-access-key" type="password" maxlength="1024" spellcheck="false" autocomplete="new-password" translate="no"></label>
+                <label class="field"><span class="field-label">Secret Key</span><input id="bootstrap-secret-key" type="password" maxlength="4096" spellcheck="false" autocomplete="new-password" translate="no"></label>
+                <label class="field"><span class="field-label">公開網址（選填）</span><input id="bootstrap-public-url" type="text" maxlength="2048" spellcheck="false" autocomplete="off" translate="no"></label>
+                <label class="field"><span class="field-label">CDN 地址（選填）</span><input id="bootstrap-cdn" type="text" maxlength="2048" spellcheck="false" autocomplete="off" translate="no"></label>
+                <label class="confirm-check"><input id="bootstrap-path-style" type="checkbox" checked><span>使用 path style 存取（RustFS／通用 S3 通常需要；R2 不需要）</span></label>
+              </div>
+              <p id="bootstrap-storage-help" class="field-help" hidden>密鑰只在建立預覽時送出一次，不會顯示、回傳或存在瀏覽器；送出後立即清除。修改任何輸入都要重新建立預覽並重新輸入密鑰。</p>
+            </fieldset>
+            <ul id="bootstrap-problems" class="list list-amber" hidden></ul>
+            <div class="form-actions">
+              <button type="submit" id="bootstrap-preview" class="btn btn-primary" disabled>建立預覽</button>
+              <button type="button" id="bootstrap-lookup" class="btn btn-ghost" hidden>查詢原預覽</button>
+              <button type="button" id="bootstrap-close" class="btn btn-ghost">關閉</button>
+            </div>
+          </form>
+          <div id="bootstrap-preview-view" class="plan-view" hidden></div>
+          <fieldset id="bootstrap-permissions" class="bootstrap-step" hidden>
+            <legend>4 · 逐項確認權限</legend>
+            <div id="bootstrap-permission-list"></div>
+          </fieldset>
+          <div class="form-actions">
+            <button type="button" id="bootstrap-approve" class="btn btn-warn" hidden disabled>批准並排入背景執行…</button>
+            <button type="button" id="bootstrap-job-lookup" class="btn btn-ghost" hidden>查詢任務</button>
+          </div>
+          <div id="bootstrap-result" class="message" role="status" aria-live="polite" hidden></div>
+        </section>
+        <p id="servers-status" class="message message-amber" role="status" hidden></p>
+        <p id="servers-result" class="message" role="status" aria-live="polite" hidden></p>
+        <ol id="server-steps" class="wizard-steps" aria-label="添加與安裝步驟" hidden></ol>
+
+        <section id="servers-list-panel" aria-label="已登記的伺服器">
+          <p id="servers-summary" class="server-summary"></p>
+          <div id="servers-list" class="server-list"></div>
+        </section>
+
+        <section id="server-form-panel" class="panel" aria-labelledby="server-form-title" hidden>
+          <header class="panel-head"><h2 id="server-form-title">添加 SSH 伺服器</h2></header>
+          <form id="server-form" class="form server-form" novalidate autocomplete="off">
+            <label class="field">
+              <span class="field-label">名稱</span>
+              <input id="server-name" type="text" maxlength="64" spellcheck="false" translate="no" autocomplete="off" aria-describedby="server-name-help">
+              <span id="server-name-help" class="field-help">只用於中控內辨識；1–64 個字元。</span>
+            </label>
+            <fieldset id="server-location" class="choice-grid">
+              <legend>位置</legend>
+              <label class="choice"><input type="radio" name="server-location" value="REMOTE" checked><b>遠端伺服器</b><small>以 IP 或主機名稱連線。</small></label>
+              <label class="choice"><input type="radio" name="server-location" value="CONTROL_HOST"><b>中控本機</b><small>與中控同一台伺服器，主機使用 127.0.0.1。</small></label>
+            </fieldset>
+            <div id="server-local-note" class="local-note" role="note" hidden>
+              <p><strong>「中控本機」指運行中控服務的那台伺服器，並非你正在開啟網頁的這台電腦。</strong></p>
+              <ul>
+                <li>那台伺服器仍需要執行 SSH 服務，並提供有效的 SSH 帳號與憑據。</li>
+                <li>若中控在容器內，127.0.0.1 指的是該容器；請改選「遠端伺服器」並填能到達宿主機的位址。</li>
+                <li>業務站使用獨立的安裝目錄與 HTTP 埠；中控只安裝與更新業務站，不會更新或覆蓋中控自身。</li>
+              </ul>
+            </div>
+            <div class="form-grid">
+              <label class="field">
+                <span class="field-label">主機</span>
+                <input id="server-host" type="text" maxlength="253" spellcheck="false" translate="no" autocomplete="off" aria-describedby="server-host-help">
+                <span id="server-host-help" class="field-help">主機名稱、IPv4 或 IPv6；不含協定、使用者或路徑。</span>
+              </label>
+              <label class="field">
+                <span class="field-label">SSH 埠</span>
+                <input id="server-port" type="number" min="1" max="65535" inputmode="numeric" value="22">
+              </label>
+              <label class="field span-2">
+                <span class="field-label">SSH 使用者</span>
+                <input id="server-username" type="text" maxlength="128" spellcheck="false" translate="no" autocomplete="off" aria-describedby="server-username-help">
+                <span id="server-username-help" class="field-help">首次安裝需要 root，或下方選擇已配置的免密 sudo；版本更新與檢測也使用這個帳號。</span>
+              </label>
+            </div>
+            <fieldset id="server-privilege" class="choice-grid">
+              <legend>執行權限</legend>
+              <label class="choice"><input type="radio" name="server-privilege" value="NONE" checked><b>直接執行</b><small>以上面的帳號直接執行。</small></label>
+              <label id="server-privilege-sudo" class="choice"><input type="radio" name="server-privilege" value="SUDO"><b>免密 sudo</b><small>以 sudo -n 執行；需伺服器已配置免密 sudo，不輸入 sudo 密碼。</small></label>
+            </fieldset>
+            <p id="server-privilege-note" class="hint" hidden></p>
+            <fieldset id="server-credential-source" class="choice-grid" hidden>
+              <legend>憑據來源</legend>
+              <label class="choice"><input type="radio" name="server-credential-source" value="MANUAL" checked><b>手動輸入</b><small>在本頁輸入密碼或私鑰。</small></label>
+              <label id="server-credential-source-inventory" class="choice"><input type="radio" name="server-credential-source" value="OPERATOR_INVENTORY"><b>中控已配置的專用密鑰</b><small>私鑰留在中控伺服器，不經過瀏覽器。</small></label>
+            </fieldset>
+            <p id="server-credential-source-note" class="hint" hidden></p>
+            <label id="server-credential-id-field" class="field" hidden>
+              <span class="field-label">專用密鑰</span>
+              <select id="server-credential-id"><option value="">請選擇</option></select>
+            </label>
+            <fieldset id="server-auth" class="choice-grid">
+              <legend>認證方式</legend>
+              <label class="choice"><input type="radio" name="server-auth" value="PASSWORD" checked><b>密碼</b><small>只輸入，不回顯。</small></label>
+              <label class="choice"><input type="radio" name="server-auth" value="PRIVATE_KEY"><b>私鑰</b><small>OpenSSH／PEM；目前只支援沒有保護密碼的私鑰。</small></label>
+            </fieldset>
+            <label id="server-password-field" class="field">
+              <span class="field-label">SSH 密碼</span>
+              <input id="server-password" type="password" autocomplete="new-password" maxlength="256" translate="no">
+            </label>
+            <label id="server-key-field" class="field" hidden>
+              <span class="field-label">私鑰</span>
+              <textarea id="server-private-key" class="key" rows="6" spellcheck="false" translate="no" autocomplete="off" autocapitalize="off"></textarea>
+            </label>
+            <p id="server-credential-help" class="field-help">憑據只送出一次，中控加密保存，之後不會顯示或回傳，也不會存在瀏覽器。</p>
+
+            <section class="hostkey" aria-labelledby="server-hostkey-title">
+              <h3 id="server-hostkey-title" class="sub-title">主機指紋</h3>
+              <p id="server-hostkey-status" class="hint"></p>
+              <div id="server-hostkeys" class="hostkey-list"></div>
+              <p id="server-hostkey-command" class="hint" hidden>在伺服器上可用 <code class="cmd" translate="no">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> 查看（其他類型改用對應檔名）。</p>
+              <label id="server-hostkey-confirm-field" class="confirm-check" hidden><input id="server-hostkey-confirm" type="checkbox"><span>我已在伺服器上（或向其管理員）獨立核對，選取的指紋一致。</span></label>
+              <div class="form-actions"><button type="button" id="server-hostkey-fetch" class="btn btn-ghost">取得主機指紋</button></div>
+            </section>
+
+            <ul id="server-form-problems" class="list list-red" hidden></ul>
+            <div class="form-actions">
+              <button type="submit" id="server-save" class="btn btn-primary" disabled>儲存登記…</button>
+              <button type="button" id="server-form-cancel" class="btn btn-ghost">取消</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="server-plan-panel" class="panel" aria-labelledby="server-plan-title" hidden>
+          <header class="panel-head"><h2 id="server-plan-title">首次安裝計畫</h2></header>
+          <form id="server-plan-form" class="form server-form" novalidate autocomplete="off">
+            <label class="field">
+              <span class="field-label">業務版本</span>
+              <select id="server-plan-release" translate="no"></select>
+            </label>
+            <div id="server-plan-install-fields" class="form-grid">
+              <label class="field">
+                <span class="field-label">業務站對外網址</span>
+                <input id="server-plan-url" type="text" inputmode="url" maxlength="512" spellcheck="false" translate="no" autocomplete="off" aria-describedby="server-plan-url-help">
+                <span id="server-plan-url-help" class="field-help">將來目標主機 Nginx 對外提供的完整網址（http 或 https），不含帳號、參數或錨點。</span>
+              </label>
+              <label class="field">
+                <span class="field-label">業務 HTTP 埠</span>
+                <input id="server-plan-port" type="number" min="1024" max="65535" inputmode="numeric" value="18090" aria-describedby="server-plan-port-help">
+              </label>
+              <p id="server-plan-port-help" class="field-help span-2">只監聽目標主機 127.0.0.1，供目標主機 Nginx 轉發；不能使用 18080、18081。</p>
+              <fieldset id="server-plan-identity" class="choice-grid span-2" hidden>
+                <legend>站點角色</legend>
+                <label id="server-plan-role-legacy" class="choice"><input type="radio" name="server-plan-role" value=""><b>不分配身份</b><small>沿用獨立安裝，不保留集群分配。</small></label>
+                <label class="choice"><input type="radio" name="server-plan-role" value="CAMPUS"><b>校內權威站</b><small>分配編號固定為 0，複製目前管理員作為初始管理員。</small></label>
+                <label class="choice"><input type="radio" name="server-plan-role" value="EXTERNAL"><b>校外業務站</b><small>分配編號 1–1023；不複製管理員，安裝後等待接入。</small></label>
+              </fieldset>
+              <label id="server-plan-slot-field" class="field" hidden>
+                <span class="field-label">分配編號</span>
+                <input id="server-plan-slot" type="number" min="1" max="1023" inputmode="numeric" aria-describedby="server-plan-slot-help">
+                <span id="server-plan-slot-help" class="field-help">首次執行前永久保留，不會因移除登記或安裝失敗回收。</span>
+              </label>
+              <p id="server-plan-identity-note" class="hint span-2" hidden></p>
+              <label class="confirm-check span-2"><input id="server-plan-docker" type="checkbox"><span>允許中控以伺服器既有的 apt 軟體來源安裝 Docker／Compose（僅 Debian 13+／Ubuntu 24.04+）。不勾選時只檢測，不改動系統套件。</span></label>
+            </div>
+            <p id="server-plan-update-note" class="hint" hidden></p>
+            <ul id="server-plan-problems" class="list list-red" hidden></ul>
+            <div class="form-actions">
+              <button type="submit" id="server-plan-create" class="btn btn-primary" disabled>建立計畫</button>
+              <button type="button" id="server-plan-cancel" class="btn btn-ghost">返回伺服器列表</button>
+            </div>
+          </form>
+          <div id="server-plan-view" class="plan-view"></div>
+          <div class="form-actions">
+            <button type="button" id="server-plan-execute" class="btn btn-warn" hidden disabled>確認安裝…</button>
+          </div>
+        </section>
+
+        <section id="server-cluster-panel" class="panel" aria-labelledby="server-cluster-title" hidden>
+          <header class="panel-head"><h2 id="server-cluster-title">接入集群</h2></header>
+          <div class="callout callout-amber">
+            <p id="server-cluster-intro" class="note note-amber">首次接入只支援空集群：把「中控本機」的已安裝校內業務站設為首個權威站。中控會改接該站的資料庫並短暫重啟（約 30–120 秒）；兩邊原有資料與帳號都保留。這是<strong>單站集群</strong>，跨站同步尚未啟用，新增其他成員會被拒絕。</p>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="server-cluster-plan-create" class="btn btn-primary" disabled>建立接入計畫</button>
+            <button type="button" id="server-cluster-cancel" class="btn btn-ghost">返回伺服器列表</button>
+          </div>
+          <div id="server-cluster-plan-view" class="plan-view"></div>
+          <div class="form-actions">
+            <button type="button" id="server-cluster-execute" class="btn btn-warn" hidden disabled>確認接入集群…</button>
+          </div>
+        </section>
+
+        <section id="server-cluster-job-panel" class="panel" aria-labelledby="server-cluster-job-title" hidden>
+          <header class="panel-head"><h2 id="server-cluster-job-title">接入集群任務</h2></header>
+          <p id="server-cluster-reconnect" class="message message-amber" role="status" aria-live="polite" hidden></p>
+          <div id="server-cluster-job-view"></div>
+          <div class="form-actions">
+            <button type="button" id="server-cluster-job-refresh" class="btn btn-ghost" hidden>重新讀取任務</button>
+            <button type="button" id="server-cluster-job-reconcile" class="btn btn-primary" hidden disabled>核對實際成員狀態…</button>
+            <button type="button" id="server-cluster-job-recover" class="btn btn-warn" hidden disabled>預覽恢復原設定…</button>
+          </div>
+          <p id="server-cluster-recover-note" class="hint" hidden></p>
+          <form id="server-cluster-lookup-form" class="inline-form" novalidate autocomplete="off">
+            <label class="field">
+              <span class="field-label">依接入任務或計畫 UUID 查詢</span>
+              <input id="server-cluster-lookup-id" type="text" maxlength="36" spellcheck="false" translate="no" autocomplete="off">
+            </label>
+            <button type="submit" id="server-cluster-lookup-submit" class="btn btn-ghost">查詢</button>
+          </form>
+          <p class="hint">接入任務與安裝任務分開。完整列表見「任務歷史」；也可在此依 UUID 查詢，重新登入後會自動查回最近的接入任務。任務只有總體狀態與階段。</p>
+        </section>
+
+        <section id="server-job-panel" class="panel" aria-labelledby="server-job-title">
+          <header class="panel-head"><h2 id="server-job-title">安裝／更新任務</h2></header>
+          <div id="server-job-view"></div>
+          <div class="form-actions">
+            <button type="button" id="server-job-refresh" class="btn btn-ghost" hidden>重新讀取任務</button>
+            <button type="button" id="server-job-reconcile" class="btn btn-primary" hidden disabled>核對遠端記錄…</button>
+          </div>
+          <form id="server-job-lookup-form" class="inline-form" novalidate autocomplete="off">
+            <label class="field">
+              <span class="field-label">依任務或計畫 UUID 查詢</span>
+              <input id="server-job-lookup-id" type="text" maxlength="36" spellcheck="false" translate="no" autocomplete="off">
+            </label>
+            <button type="submit" id="server-job-lookup-submit" class="btn btn-ghost">查詢</button>
+          </form>
+          <p class="hint">完整列表見「任務歷史」；也可在此依任務或計畫 UUID 查詢。任務只有總體狀態。</p>
+        </section>
+      </section>
+    </div>
+
+    <div id="tasks-view" class="console" hidden>
+      <section id="page-tasks" class="page" data-page="tasks" aria-label="任務歷史" hidden>
+        <header class="page-head"><h1>任務歷史</h1><p>安裝、更新、恢復、接入與集群部署任務。列表只讀；核對在任務詳情中確認後進行。</p></header>
+        <section id="tasks-fences-panel" class="panel" aria-labelledby="tasks-fences-title" hidden>
+          <header class="panel-head"><h2 id="tasks-fences-title">未結束的權威發布</h2></header>
+          <div id="tasks-fences"></div>
+        </section>
+        <section class="panel" aria-labelledby="tasks-list-title">
+          <header class="panel-head"><h2 id="tasks-list-title">任務</h2><span id="tasks-observed" class="card-sub"></span></header>
+          <form id="tasks-filter" class="tasks-filter" novalidate>
+            <label class="field"><span class="field-label">類型</span><select id="tasks-type"><option value="">全部類型</option><option value="INSTALL">首次安裝</option><option value="UPDATE">版本更新</option><option value="RECOVER">恢復安裝</option><option value="ENROLLMENT">接入集群</option><option value="DEPLOYMENT">集群部署</option><option value="CONTROLLER_INSTALL">中控與業務安裝</option></select></label>
+            <label class="field"><span class="field-label">狀態</span><select id="tasks-state"><option value="">全部狀態</option><option value="QUEUED">排隊中</option><option value="RUNNING">執行中</option><option value="SUCCEEDED">已完成</option><option value="FAILED">失敗</option><option value="OUTCOME_UNKNOWN">結果未知</option></select></label>
+            <label class="field"><span class="field-label">伺服器</span><select id="tasks-server" translate="no"><option value="">全部伺服器</option></select></label>
+          </form>
+          <div id="tasks-status" class="message" role="status" aria-live="polite" hidden></div>
+          <ul id="tasks-list" class="task-list" aria-label="任務列表"></ul>
+          <div class="form-actions">
+            <button type="button" id="tasks-more" class="btn btn-ghost" hidden>載入更多</button>
+            <button type="button" id="tasks-reload" class="btn btn-ghost">重新讀取</button>
+          </div>
+          <form id="tasks-open-form" class="tasks-open" novalidate autocomplete="off">
+            <label class="field"><span class="field-label">類型</span><select id="tasks-open-type"><option value="INSTALL">首次安裝</option><option value="UPDATE">版本更新</option><option value="RECOVER">恢復安裝</option><option value="ENROLLMENT">接入集群</option><option value="DEPLOYMENT">集群部署</option><option value="CONTROLLER_INSTALL">中控與業務安裝</option></select></label>
+            <label class="field"><span class="field-label">依 UUID 開啟詳情</span><input id="tasks-open-id" type="text" maxlength="36" spellcheck="false" translate="no" autocomplete="off"></label>
+            <button type="submit" id="tasks-open-submit" class="btn btn-ghost">開啟詳情</button>
+          </form>
+        </section>
+        <section id="tasks-controller-panel" class="panel" aria-labelledby="tasks-controller-title" hidden>
+          <header class="panel-head"><h2 id="tasks-controller-title">中控與業務安裝任務</h2><span id="tasks-controller-observed" class="card-sub"></span></header>
+          <div id="tasks-controller-view" role="status" aria-live="polite"></div>
+          <div class="form-actions">
+            <button type="button" id="tasks-controller-reload" class="btn btn-ghost">重新讀取</button>
+            <button type="button" id="tasks-controller-close" class="btn btn-ghost">關閉</button>
+          </div>
+          <p class="hint">只讀詳情：本頁不建立、不接受、不執行、不重試派發、不重新批准，也不核對。只有後端明確回報可撤銷時，才提供撤銷尚未派發的排隊任務。建立與批准在「伺服器」頁的「在新伺服器安裝中控與業務」。</p>
+        </section>
+      </section>
+    </div>
+
+    <div id="account-view" class="console" hidden>
+      <section id="page-account" class="page" data-page="account" aria-label="帳號設定" hidden>
+        <header class="page-head"><h1>帳號設定</h1><p>只能修改自己的使用者名稱與密碼。</p></header>
+        <section class="panel" aria-labelledby="account-current-title">
+          <header class="panel-head"><h2 id="account-current-title">目前帳號</h2></header>
+          <dl class="kv"><dt>使用者名稱</dt><dd id="account-current-username" class="mono" translate="no">—</dd></dl>
+          <p id="account-status" class="message message-amber" role="status" hidden></p>
+        </section>
+        <section class="panel" aria-labelledby="account-form-title">
+          <header class="panel-head"><h2 id="account-form-title">修改使用者名稱或密碼</h2></header>
+          <form id="account-form" class="form account-form" novalidate autocomplete="off">
+            <label class="field">
+              <span class="field-label">目前密碼（必填）</span>
+              <input id="account-current-password" type="password" autocomplete="current-password" maxlength="256" translate="no">
+            </label>
+            <label class="field">
+              <span class="field-label">新使用者名稱</span>
+              <input id="account-new-username" type="text" autocomplete="username" maxlength="32" spellcheck="false" translate="no" aria-describedby="account-username-help">
+              <span id="account-username-help" class="field-help">留空表示不修改。3–32 個字元，只能使用英文字母、數字與底線。</span>
+            </label>
+            <label class="field">
+              <span class="field-label">新密碼</span>
+              <input id="account-new-password" type="password" autocomplete="new-password" maxlength="256" translate="no" aria-describedby="account-password-help">
+              <span id="account-password-help" class="field-help">留空表示不修改。12–64 個字元，可包含空格。</span>
+            </label>
+            <label class="field">
+              <span class="field-label">確認新密碼</span>
+              <input id="account-confirm-password" type="password" autocomplete="new-password" maxlength="256" translate="no">
+            </label>
+            <div class="callout callout-amber">
+              <p class="note note-amber">修改成功後，所有既有登入（包含這個分頁與其他裝置）都會立即失效，需要重新登入。</p>
+            </div>
+            <ul id="account-problems" class="list list-red" hidden></ul>
+            <div class="form-actions">
+              <button type="submit" id="account-submit" class="btn btn-primary" disabled>儲存變更…</button>
+            </div>
+            <p id="account-result" class="message" role="status" aria-live="polite" hidden></p>
+          </form>
+        </section>
+      </section>
+    </div>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="confirm-dialog" class="dialog" aria-labelledby="dialog-title">
+    <div class="dialog-body">
+      <h2 id="dialog-title"></h2>
+      <ul id="dialog-lines" class="dialog-lines"></ul>
+      <div class="dialog-actions">
+        <button type="button" id="dialog-cancel" class="btn btn-ghost">取消</button>
+        <button type="button" id="dialog-confirm" class="btn btn-warn">確認</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

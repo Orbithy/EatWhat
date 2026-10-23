@@ -1,0 +1,38 @@
+{
+  "environment_kind": "isolated-acceptance",
+  "campus": {
+    "mode": "CAMPUS",
+    "site_id": "campus-acceptance",
+    "instance_id": "00000000-0000-0000-0000-000000000000",
+    "pg_service": "eatwhat_acceptance_campus",
+    "readiness_origin": "https://campus-acceptance.example.invalid"
+  },
+  "external": {
+    "mode": "EXTERNAL",
+    "site_id": "external-acceptance",
+    "instance_id": "00000000-0000-0000-0000-000000000000",
+    "pg_service": "eatwhat_acceptance_external",
+    "readiness_origin": "https://external-acceptance.example.invalid"
+  },
+  "node_tls": {
+    "external_origin": "https://external-sync-acceptance.example.invalid",
+    "external_leaf_sha256": "REPLACE_WITH_ACTUAL_LEAF_SHA256",
+    "ca_file": "/path/to/acceptance-ca.pem",
+    "campus_certificate_file": "/path/to/acceptance-campus.pem",
+    "campus_private_key_file": "/path/to/acceptance-campus-key.pem"
+  },
+  "rustfs": {
+    "endpoint": "https://rustfs-acceptance.example.invalid",
+    "region": "us-east-1",
+    "bucket": "eatwhat-acceptance-campus",
+    "aws_profile": "eatwhat-acceptance-rustfs",
+    "dedicated_test_bucket": true
+  },
+  "r2": {
+    "endpoint": "https://REPLACE_WITH_ACCOUNT_ID.r2.cloudflarestorage.com",
+    "region": "auto",
+    "bucket": "eatwhat-acceptance-external",
+    "aws_profile": "eatwhat-acceptance-r2",
+    "dedicated_test_bucket": true
+  }
+}

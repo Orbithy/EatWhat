@@ -31,6 +31,9 @@
         <sentry.skip>true</sentry.skip>
         <sentry.skipSourceBundle>true</sentry.skipSourceBundle>
         <sentry.skipValidateSdkDependencyVersions>true</sentry.skipValidateSdkDependencyVersions>
+        <!-- Keep Mockito instrumentation explicit on Java 21+, without runtime self-attach. -->
+        <argLine></argLine>
+        <test.mockito.agent>-javaagent:"${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar"</test.mockito.agent>
     </properties>
     <dependencies>
         <dependency>
@@ -121,6 +124,12 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>2.0.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
@@ -171,7 +180,45 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <excludes>
+                    <!-- Local ignored configurations may contain credentials; never package them. -->
+                    <exclude>application.yml</exclude>
+                    <exclude>application.example.yml</exclude>
+                    <exclude>**/__pycache__/**</exclude>
+                </excludes>
+            </resource>
+            <resource>
+                <directory>deploy</directory>
+                <targetPath>control</targetPath>
+                <includes><include>remote-release.py</include><include>initdb/20-create-application-db.sh</include></includes>
+            </resource>
+        </resources>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <!-- Integration helpers can import files in target/classes after resources ran. -->
+                    <excludes>
+                        <!-- Resource filtering does not remove stale files from target/classes. -->
+                        <exclude>application.yml</exclude>
+                        <exclude>application.example.yml</exclude>
+                        <exclude>**/__pycache__/**</exclude>
+                        <exclude>**/*.pyc</exclude>
+                        <exclude>**/*.pyo</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} ${test.mockito.agent}</argLine>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -234,4 +281,93 @@
         </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>business-browser-acceptance</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <version>3.5.3</version>
+                        <configuration>
+                            <failIfNoTests>true</failIfNoTests>
+                            <argLine>@{argLine} ${test.mockito.agent}</argLine>
+                            <includes>
+                                <include>**/LocalBusinessBrowserAcceptance.java</include>
+                            </includes>
+                            <reportsDirectory>${project.build.directory}/business-browser-reports</reportsDirectory>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals><goal>integration-test</goal><goal>verify</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Explicit acceptance opt-in. This class is excluded by both normal test naming conventions. -->
+        <profile>
+            <id>storage-acceptance</id>
+            <properties>
+                <eatwhat.acceptance.local-contract>false</eatwhat.acceptance.local-contract>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <version>3.5.3</version>
+                        <configuration>
+                            <failIfNoTests>true</failIfNoTests>
+                            <argLine>@{argLine} ${test.mockito.agent}</argLine>
+                            <includes>
+                                <include>**/LocalSitesRealStorageAcceptance.java</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <eatwhat.acceptance.local-contract>${eatwhat.acceptance.local-contract}</eatwhat.acceptance.local-contract>
+                            </systemPropertyVariables>
+                            <reportsDirectory>${project.build.directory}/storage-acceptance-reports</reportsDirectory>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>integration</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <version>3.5.3</version>
+                        <configuration>
+                            <failIfNoTests>true</failIfNoTests>
+                            <argLine>@{argLine} ${test.mockito.agent}</argLine>
+                            <systemPropertyVariables>
+                                <eatwhat.packaged-jar>${project.build.directory}/${project.build.finalName}.jar</eatwhat.packaged-jar>
+                            </systemPropertyVariables>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

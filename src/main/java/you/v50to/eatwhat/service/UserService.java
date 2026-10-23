@@ -6,8 +6,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
+import you.v50to.eatwhat.sync.relation.RelationCommands;
+import you.v50to.eatwhat.sync.relation.RelationKind;
+import you.v50to.eatwhat.sync.profile.ProfileCommands;
+import you.v50to.eatwhat.sync.privacy.PrivacyCommands;
+import you.v50to.eatwhat.config.sync.ManagedDomainWriteGuard;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -25,6 +30,9 @@ import you.v50to.eatwhat.mapper.PrivacyMapper;
 import you.v50to.eatwhat.mapper.UserInfoMapper;
 import you.v50to.eatwhat.mapper.UserMapper;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
+import you.v50to.eatwhat.service.storage.FileLifecycleService;
+import you.v50to.eatwhat.data.enums.UploadBiz;
+import org.springframework.transaction.annotation.Transactional;
 import you.v50to.eatwhat.utils.LocationValidationUtil;
 
 import java.time.ZoneOffset;
@@ -38,6 +46,19 @@ import static you.v50to.eatwhat.utils.ValidUtil.validPageSize;
 @Service
 @Slf4j
 public class UserService {
+    @Autowired(required=false) private you.v50to.eatwhat.account.multiwriter.MultiwriterAccounts multiwriter;
+
+    @Autowired(required=false)
+    private RelationCommands relations;
+
+    @Autowired(required=false)
+    private ProfileCommands profileCommands;
+
+    @Autowired(required=false)
+    private PrivacyCommands privacyCommands;
+
+    @Autowired(required=false)
+    private ManagedDomainWriteGuard managedDomainWriteGuard;
 
     @Resource
     private UserMapper userMapper;
@@ -57,6 +78,8 @@ public class UserService {
     private StringRedisTemplate redis;
     @Resource
     private ObjectStorageService objectStorageService;
+    @Autowired(required = false)
+    private FileLifecycleService fileLifecycleService;
     @Resource
     private NotificationService notificationService;
 
@@ -75,6 +98,9 @@ public class UserService {
         if (scene == null) {
             return Result.fail(BizCode.PARAM_MISSING, "scene不能为空");
         }
+        if (scene == Scene.login) {
+            return Result.fail(BizCode.PARAM_INVALID, "登录验证码请用 /auth/phone/code");
+        }
         if (!StpUtil.hasRole("verified")) {
             return Result.fail(BizCode.STATE_NOT_ALLOWED, "未通过认证，无法发送验证码");
         }
@@ -82,11 +108,12 @@ public class UserService {
                 .eq(Contact::getAccountId, StpUtil.getLoginIdAsLong()))) {
             return Result.fail(BizCode.OP_FAILED, "已绑定手机号，无法重复绑定");
         }
-        smsService.sendCode(scene, mobile, ip);
+        smsService.sendCode(scene, mobile, ip, StpUtil.getLoginIdAsLong());
         return Result.ok();
     }
 
     public Result<Void> bindMobile(Scene scene, BindMobileReq bindMobileReq) {
+        if(multiwriter!=null && multiwriter.enabled() && !multiwriter.inCommand()) return multiwriter.command(StpUtil.getLoginIdAsLong(),StpUtil.getLoginIdAsLong(),()->bindMobile(scene,bindMobileReq));
         String mobile = bindMobileReq.getMobile();
         String code = bindMobileReq.getCode();
         Long userId = StpUtil.getLoginIdAsLong();
@@ -99,7 +126,7 @@ public class UserService {
                 .eq(Contact::getPhone, mobile))) {
             return Result.fail(BizCode.OP_FAILED, "该手机号已被绑定");
         }
-        if (smsService.verifyCode(scene, mobile, code)) {
+        if (smsService.verifyCode(scene, mobile, code, userId)) {
             Contact contact = new Contact();
             contact.setAccountId(userId);
             contact.setPhone(mobile);
@@ -116,7 +143,9 @@ public class UserService {
      * @param dto 更新数据
      * @return 更新结果
      */
+    @Transactional
     public Result<Void> updateUserInfo(UpdateUserInfoDTO dto) {
+        if(multiwriter!=null && multiwriter.enabled() && !multiwriter.inCommand()) return multiwriter.command(StpUtil.getLoginIdAsLong(),StpUtil.getLoginIdAsLong(),()->updateUserInfo(dto));
         Long userId = StpUtil.getLoginIdAsLong();
         // 省份城市校验（使用独立服务）
         Result<Void> validationResult = locationValidationUtil.validateProvinceAndCity(
@@ -126,30 +155,56 @@ public class UserService {
             return validationResult;
         }
 
-        // 更新 users 表中的昵称和头像（key）
+        if (profileCommands != null) {
+            return profileCommands.atomic(() -> {
+                profileCommands.lockSubject(userId);
+                if (ProfileCommands.hasProfileFields(dto) && !profileCommands.canEdit(userId)) {
+                    return Result.fail(BizCode.DATA_SYNC_PENDING);
+                }
+                if (profileCommands.hasOpenConflict(userId, dto)) {
+                    return Result.fail(BizCode.DATA_SYNC_PENDING);
+                }
+                var before = ProfileCommands.hasProfileFields(dto)
+                        ? profileCommands.snapshotBeforeUpdate(userId) : null;
+                if (before != null && !profileCommands.effectiveHometownValid(dto, before)) {
+                    return Result.fail(BizCode.PARAM_INVALID);
+                }
+                if (before != null) profileCommands.prepareEdit(userId, before);
+                Result<Void> result = updateUserInfoLegacy(userId, dto);
+                if (result.getCode() == BizCode.SUCCESS.getCode() && before != null) {
+                    profileCommands.capture(userId, dto, before);
+                }
+                return result;
+            });
+        }
+        if (managedDomainWriteGuard != null && managedDomainWriteGuard.profileManaged(userId)
+                && ProfileCommands.hasProfileFields(dto)) {
+            return Result.fail(BizCode.DATA_SYNC_PENDING);
+        }
+        return updateUserInfoLegacy(userId, dto);
+    }
+
+    private Result<Void> updateUserInfoLegacy(Long userId, UpdateUserInfoDTO dto) {
+        // 更新 users 表中的昵称和头像（key）。昵称写 display_name，不改登录名，也不查重。
         if (dto.getUserName() != null || dto.getAvatar() != null) {
-            if (dto.getUserName() != null && userMapper.exists(new LambdaQueryWrapper<User>()
-                    .eq(User::getUserName, dto.getUserName())
-                    .ne(User::getId, userId))) {
-                return Result.fail(BizCode.USERNAME_EXISTS);
-            }
+            User currentUser = userMapper.selectById(userId);
 
             User user = new User();
             user.setId(userId);
             if (dto.getUserName() != null) {
-                user.setUserName(dto.getUserName());
+                user.setDisplayName(dto.getUserName());
             }
+            String replacedAvatar = null;
             if (dto.getAvatar() != null) {
+                if (fileLifecycleService != null && (currentUser == null || !dto.getAvatar().equals(currentUser.getAvatar()))) {
+                    fileLifecycleService.finalizeAndReference(userId, UploadBiz.AVATAR, dto.getAvatar(), "user_avatar", userId.toString(), "PUBLIC");
+                    if (currentUser != null) replacedAvatar = currentUser.getAvatar();
+                }
                 user.setAvatar(dto.getAvatar());
             }
-            try {
-                userMapper.updateById(user);
-            } catch (DataIntegrityViolationException e) {
-                if (dto.getUserName() != null) {
-                    return Result.fail(BizCode.USERNAME_EXISTS);
-                }
-                throw e;
-            }
+            userMapper.updateById(user);
+            // The avatar really changed: release the old key's reference in the same transaction.
+            if (replacedAvatar != null) fileLifecycleService.releaseReferences("user_avatar", userId.toString(), List.of(replacedAvatar), "KEY_REPLACED");
         }
 
         // 更新 user_info 表
@@ -217,24 +272,11 @@ public class UserService {
             pageSize = 100; // 限制最大每页数量
         }
 
-        // 检查隐私设置
-        String key = "privacy:" + userId;
-        Object v = redis.opsForHash().get(key, "follower");
-        if (v == null) {
-            Privacy p = privacyMapper.selectOne(
-                    new LambdaQueryWrapper<Privacy>()
-                            .eq(Privacy::getAccountId, userId));
-            if (p != null) {
-                redis.opsForHash().put(key, "follower", p.getFollower().toString());
-                redis.opsForHash().put(key, "following", p.getFollowing().toString());
-                v = p.getFollower().toString();
-            } else {
-                // 如果没有隐私设置记录，默认为公开
-                v = "true";
-            }
-        }
+        // Privacy is authorization-sensitive. Read the database on every request so stale Redis cannot disclose lists.
+        Privacy p = privacyMapper.selectOne(new LambdaQueryWrapper<Privacy>().eq(Privacy::getAccountId, userId));
+        boolean visible = p == null || !Boolean.FALSE.equals(p.getFollower());
 
-        if ("false".equals(v.toString()) && !userId.equals(StpUtil.getLoginIdAsLong())) {
+        if (!visible && !userId.equals(StpUtil.getLoginIdAsLong())) {
             return Result.fail(BizCode.NOT_SUPPORTED, "未公开");
         }
 
@@ -254,6 +296,29 @@ public class UserService {
     public Result<Void> changePrivacy(PrivacyDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
 
+        if (privacyCommands == null && managedDomainWriteGuard != null
+                && managedDomainWriteGuard.privacyManaged(userId)
+                && (dto.getFollowing() != null || dto.getFollower() != null)) {
+            return Result.fail(BizCode.DATA_SYNC_PENDING);
+        }
+
+        if (privacyCommands != null) {
+            return privacyCommands.atomic(() -> {
+                privacyCommands.lockSubject(userId);
+                var before = privacyCommands.snapshotBeforeChange(userId);
+                privacyCommands.prepareChange(userId, before);
+                Result<Void> result = changePrivacyLegacy(userId, dto);
+                if (result.getCode() == BizCode.SUCCESS.getCode()
+                        && (dto.getFollowing() != null || dto.getFollower() != null)) {
+                    privacyCommands.capture(userId, dto, before);
+                }
+                return result;
+            });
+        }
+        return changePrivacyLegacy(userId, dto);
+    }
+
+    private Result<Void> changePrivacyLegacy(Long userId, PrivacyDTO dto) {
         Privacy p = new Privacy();
         p.setAccountId(userId);
         p.setFollowing(dto.getFollowing());
@@ -299,24 +364,11 @@ public class UserService {
             pageSize = 100; // 限制最大每页数量
         }
 
-        // 检查隐私设置
-        String key = "privacy:" + userId;
-        Object v = redis.opsForHash().get(key, "following");
-        if (v == null) {
-            Privacy p = privacyMapper.selectOne(
-                    new LambdaQueryWrapper<Privacy>()
-                            .eq(Privacy::getAccountId, userId));
-            if (p != null) {
-                redis.opsForHash().put(key, "follower", p.getFollower().toString());
-                redis.opsForHash().put(key, "following", p.getFollowing().toString());
-                v = p.getFollowing().toString();
-            } else {
-                // 如果没有隐私设置记录，默认为公开
-                v = "true";
-            }
-        }
+        // Privacy is authorization-sensitive; the cached value is never the access-control decision.
+        Privacy p = privacyMapper.selectOne(new LambdaQueryWrapper<Privacy>().eq(Privacy::getAccountId, userId));
+        boolean visible = p == null || !Boolean.FALSE.equals(p.getFollowing());
 
-        if ("false".equals(v.toString()) && !userId.equals(StpUtil.getLoginIdAsLong())) {
+        if (!visible && !userId.equals(StpUtil.getLoginIdAsLong())) {
             return Result.fail(BizCode.NOT_SUPPORTED, "未公开");
         }
 
@@ -367,6 +419,12 @@ public class UserService {
         if (userId.equals(selfId)) {
             return Result.fail(BizCode.OP_FAILED, "不能关注自己");
         }
+        if (relations != null) {
+            return relations.change(RelationKind.follow, selfId, userId, null, true)
+                    ? Result.ok() : Result.fail(BizCode.OP_FAILED, "你已经关注过TA了");
+        }
+        if (managedDomainWriteGuard != null && managedDomainWriteGuard.relationManaged(
+                RelationKind.follow, selfId, userId, null)) return Result.fail(BizCode.DATA_SYNC_PENDING);
         Follow f = new Follow();
         f.setAccountId(selfId);
         f.setTargetId(userId);
@@ -381,6 +439,12 @@ public class UserService {
 
     public Result<Void> unfollow(Long userId) {
         Long selfId = StpUtil.getLoginIdAsLong();
+        if (relations != null) {
+            relations.change(RelationKind.follow, selfId, userId, null, false);
+            return Result.ok();
+        }
+        if (managedDomainWriteGuard != null && managedDomainWriteGuard.relationManaged(
+                RelationKind.follow, selfId, userId, null)) return Result.fail(BizCode.DATA_SYNC_PENDING);
         followMapper.delete(new LambdaQueryWrapper<Follow>()
                 .eq(Follow::getAccountId, selfId)
                 .eq(Follow::getTargetId, userId));
@@ -434,6 +498,7 @@ public class UserService {
      * 不能封禁管理员
      */
     public Result<Void> banUser(Long userId, BanUserDTO dto) {
+        if(multiwriter!=null && multiwriter.enabled() && !multiwriter.inCommand()) return multiwriter.command(StpUtil.getLoginIdAsLong(),userId,()->banUser(userId,dto));
         User user = userMapper.selectById(userId);
         if (user == null) {
             return Result.fail(BizCode.USER_NOT_FOUND);
@@ -441,15 +506,15 @@ public class UserService {
         if ("admin".equals(user.getRole())) {
             return Result.fail(BizCode.OP_FAILED, "不能封禁管理员");
         }
-        // 踢出所有已登录 token，并永久封禁（-1 表示永久）
-        StpUtil.logout(userId);
+        // 先关闭新登录入口，再踢出现有 token，避免撤销会话与设置禁用标记之间重新登录。
         StpUtil.disable(userId, -1);
+        StpUtil.logout(userId);
         // 同步更新数据库封禁状态、封禁原因和封禁时间
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, userId)
                 .set(User::getBanned, true)
                 .set(User::getBanReason, dto.getReason())
-                .set(User::getBannedAt, System.currentTimeMillis()));
+                .set(User::getBannedAt, new java.sql.Timestamp(System.currentTimeMillis())));
         return Result.ok();
     }
 
@@ -457,6 +522,7 @@ public class UserService {
      * 解封用户
      */
     public Result<Void> unbanUser(Long userId) {
+        if(multiwriter!=null && multiwriter.enabled() && !multiwriter.inCommand()) return multiwriter.command(StpUtil.getLoginIdAsLong(),userId,()->unbanUser(userId));
         User user = userMapper.selectById(userId);
         if (user == null) {
             return Result.fail(BizCode.USER_NOT_FOUND);

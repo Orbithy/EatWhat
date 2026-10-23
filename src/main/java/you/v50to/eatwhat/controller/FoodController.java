@@ -20,14 +20,31 @@ import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.FoodService;
 import you.v50to.eatwhat.service.FoodTagService;
+import you.v50to.eatwhat.utils.LoginUtil;
 
 import java.util.List;
+import you.v50to.eatwhat.data.dto.FoodQueryDTO;
+import you.v50to.eatwhat.data.dto.RecommendQueryDTO;
+import you.v50to.eatwhat.data.vo.CreatedResourceVO;
 
-@SaCheckLogin
 @CrossOrigin
 @RestController
 @RequestMapping("/foods")
 public class FoodController {
+
+    @InitBinder
+    void bindCategory(org.springframework.web.bind.WebDataBinder binder) {
+        binder.registerCustomEditor(you.v50to.eatwhat.data.enums.FoodCategory.class, new java.beans.PropertyEditorSupport() {
+            @Override public void setAsText(String text) {
+                setValue(you.v50to.eatwhat.data.enums.FoodCategory.fromValue(text));
+            }
+        });
+        binder.registerCustomEditor(you.v50to.eatwhat.data.enums.MealTime.class, new java.beans.PropertyEditorSupport() {
+            @Override public void setAsText(String text) {
+                setValue(you.v50to.eatwhat.data.enums.MealTime.fromValue(text));
+            }
+        });
+    }
 
     @Resource
     private FoodService foodService;
@@ -39,41 +56,35 @@ public class FoodController {
      */
     @SaCheckRole("verified")
     @PostMapping("/upload")
-    public Result<Void> upload(@Valid @RequestBody CreateFoodDTO dto) {
+    public Result<CreatedResourceVO> upload(@Valid @RequestBody CreateFoodDTO dto) {
         return foodService.uploadFood(dto);
     }
 
     /**
-     * 查询某餐厅的菜品列表
+     * 查询菜品：可跨餐厅按分类、预算、关键词和标签筛选
      */
-    @SaCheckRole("verified")
+    /** 游客可访问；登录后返回个人点赞、收藏和自定义标签状态。 */
     @GetMapping("/list")
-    public Result<PageResult<FoodVO>> listByRestaurant(
-            @RequestParam Long restaurantId,
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer pageSize,
-            @RequestParam(required = false) List<Long> systemTagIds,
-            @RequestParam(required = false) List<Long> myCustomTagIds,
-            @RequestParam(required = false) List<String> myCustomTagNames) {
-        return foodService.listByRestaurant(restaurantId, page, pageSize, systemTagIds, myCustomTagIds, myCustomTagNames);
+    public Result<PageResult<FoodVO>> listByRestaurant(@Valid FoodQueryDTO query) {
+        return foodService.queryFoods(query, false);
     }
 
-    @SaCheckRole("verified")
     @GetMapping("/detail/{id}")
     public Result<FoodVO> getFoodDetail(@PathVariable Long id) {
         return foodService.getFoodDetail(id);
     }
 
     /**
-     * 推荐食物接口
+     * 推荐一批菜（产品文档第 8 节）：按校区、饭点、分类出菜，一批默认 8 道；同一天推荐过的不再出现，
+     * 都推荐过一遍后从头再来。已认证用户参考打标、点赞、收藏和浏览记录，每批至少一半是大家公认的好菜；
+     * 游客和未认证账号不带个人因素。游客传 deviceId 才能去重。
      */
-    @SaCheckRole("verified")
     @GetMapping("/recommend")
-    public Result<List<FoodVO>> recommendFoods(@RequestParam(defaultValue = "10") Integer limit) {
-        return foodService.recommendFoods(limit);
+    public Result<List<FoodVO>> recommendFoods(@Valid RecommendQueryDTO query) {
+        return foodService.recommendFoods(query);
     }
 
-    @SaCheckRole("verified")
+    @SaCheckLogin
     @PostMapping("/{id}/favorite")
     public Result<Void> favoriteFood(@PathVariable Long id) {
         return foodService.favoriteFood(id);
@@ -91,13 +102,12 @@ public class FoodController {
         return foodService.unlikeFood(id);
     }
 
-    @SaCheckRole("verified")
+    @SaCheckLogin
     @PostMapping("/{id}/unfavorite")
     public Result<Void> unfavoriteFood(@PathVariable Long id) {
         return foodService.unfavoriteFood(id);
     }
 
-    @SaCheckRole("verified")
     @GetMapping("/tags/system")
     public Result<List<FoodTagSummaryVO>> listSystemTags() {
         return foodTagService.listSystemTags();
@@ -142,16 +152,15 @@ public class FoodController {
         return foodTagService.deleteMyTagging(id, tagId, StpUtil.getLoginIdAsLong());
     }
 
-    @SaCheckRole("verified")
     @GetMapping("/{id}/tags")
     public Result<FoodTagViewVO> getFoodTags(@PathVariable Long id) {
-        return foodTagService.getFoodTagView(id, StpUtil.getLoginIdAsLong());
+        return foodTagService.getFoodTagView(id, LoginUtil.currentUserIdOrNull());
     }
 
     /**
      * 获取自己上传的菜品
      */
-    @SaCheckRole("verified")
+    @SaCheckLogin
     @GetMapping("/my")
     public Result<PageResult<FoodVO>> getMyFood(
             @RequestParam(defaultValue = "1") Integer page,
@@ -160,13 +169,24 @@ public class FoodController {
         return foodService.getMyFood(userId, page, pageSize);
     }
 
-    @SaCheckRole("verified")
+    @SaCheckLogin
     @GetMapping("/favorites")
-    public Result<PageResult<FoodVO>> getMyFavoriteFoods(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer pageSize) {
-        Long userId = StpUtil.getLoginIdAsLong();
-        return foodService.getMyFavoriteFoods(userId, page, pageSize);
+    public Result<PageResult<FoodVO>> getMyFavoriteFoods(@Valid FoodQueryDTO query) {
+        return foodService.queryFoods(query, true);
+    }
+
+    /** 作者修改自己的菜品；开启多写后可在本站独立编辑；旧模式须在校内权威站进行。 */
+    @SaCheckRole("verified")
+    @PutMapping("/my/{id}")
+    public Result<Void> editMyFood(@PathVariable Long id, @Valid @RequestBody EditFoodDTO dto) {
+        return foodService.editMyFood(id, dto);
+    }
+
+    /** 作者撤回自己的菜品；开启多写后可在本站独立删除；旧模式须在校内权威站进行。 */
+    @SaCheckRole("verified")
+    @DeleteMapping("/my/{id}")
+    public Result<Void> deleteMyFood(@PathVariable Long id) {
+        return foodService.deleteMyFood(id);
     }
 // ==================== Admin API ====================
 

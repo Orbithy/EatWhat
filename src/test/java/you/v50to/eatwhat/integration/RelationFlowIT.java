@@ -937,6 +937,8 @@ class RelationFlowIT {
         var own = campus ? tls.campus() : tls.external();
         var remote = campus ? tls.external() : tls.campus();
         Map<String, String> p = new LinkedHashMap<>();
+        // Test fixtures create accounts through the closed-by-default username registration.
+        p.put("app.auth.username-registration-enabled", "true");
         p.put("app.site.mode", db.site().getMode().name()); p.put("app.site.id", db.site().getId());
         p.put("app.site.instance-id", db.site().getInstanceId().toString());
         p.put("spring.datasource.url", db.url()); p.put("spring.datasource.username", db.runtimeUsername());

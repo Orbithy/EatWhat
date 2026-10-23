@@ -4,10 +4,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import you.v50to.eatwhat.config.sync.ManagedDomainWriteGuard;
 import you.v50to.eatwhat.data.dto.AddCustomFoodTagsDTO;
 import you.v50to.eatwhat.data.dto.AddSystemFoodTagsDTO;
 import you.v50to.eatwhat.data.dto.CreateSystemFoodTagDTO;
+import you.v50to.eatwhat.data.enums.BizCode;
 import you.v50to.eatwhat.data.dto.FoodCustomTagRow;
 import you.v50to.eatwhat.data.dto.FoodSystemTagAggregateRow;
 import you.v50to.eatwhat.data.po.Food;
@@ -18,6 +21,7 @@ import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.mapper.FoodMapper;
 import you.v50to.eatwhat.mapper.FoodTagMapper;
 import you.v50to.eatwhat.mapper.FoodTaggingMapper;
+import you.v50to.eatwhat.sync.catalog.CatalogKind;
 
 import java.util.List;
 
@@ -27,9 +31,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -112,6 +118,25 @@ class FoodTagServiceTest {
         verify(foodTaggingMapper, times(2)).insert(taggingCaptor.capture());
         List<FoodTagging> taggings = taggingCaptor.getAllValues();
         assertEquals(List.of(11L, 12L), taggings.stream().map(FoodTagging::getTagId).toList());
+    }
+
+    @Test
+    void missingCustomDefinitionIsBlockedBeforeBatchWritesWhenCatalogKindIsManaged() {
+        when(foodMapper.selectById(10L)).thenReturn(new Food());
+        when(foodTagMapper.selectCustomTagsByOwnerAndNormalizedNames(eq(99L), anyList())).thenReturn(List.of());
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(contains("catalog_managed_domain"), eq(Boolean.class), eq("CUSTOM_TAG")))
+                .thenReturn(true);
+        ReflectionTestUtils.setField(foodTagService, "managedDomainWriteGuard", new ManagedDomainWriteGuard(jdbc));
+
+        AddCustomFoodTagsDTO dto = new AddCustomFoodTagsDTO();
+        dto.setNames(List.of("New definition"));
+
+        Result<Void> result = foodTagService.addCustomTagsToFood(10L, 99L, dto);
+
+        assertEquals(BizCode.DATA_SYNC_PENDING.getCode(), result.getCode());
+        verify(foodTagMapper, never()).insert(any(FoodTag.class));
+        verify(foodTaggingMapper, never()).insert(any(FoodTagging.class));
     }
 
     @Test

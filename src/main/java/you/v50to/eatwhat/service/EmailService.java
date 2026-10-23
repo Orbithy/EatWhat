@@ -3,7 +3,6 @@ package you.v50to.eatwhat.service;
 import jakarta.annotation.Resource;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -18,7 +17,9 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.HexFormat;
-import java.util.concurrent.TimeUnit;
+import java.util.List;
+import java.util.Locale;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -30,7 +31,8 @@ public class EmailService {
      */
     public enum EmailPurpose {
         VERIFICATION,  // 用于身份验证（SDU邮箱验证）
-        BINDING        // 用于绑定邮箱
+        BINDING,       // 用于绑定邮箱
+        RECOVERY       // 本站账号密码恢复
     }
 
     @Resource
@@ -47,6 +49,16 @@ public class EmailService {
 
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
+
+    @Value("${app.site.id:legacy}")
+    private String siteId = "legacy";
+
+    private static final DefaultRedisScript<String> CONSUME = new DefaultRedisScript<>("""
+            local value = redis.call('GET', KEYS[1])
+            if not value or string.sub(value,1,string.len(ARGV[1])) ~= ARGV[1] then return nil end
+            redis.call('DEL', KEYS[1])
+            return string.sub(value,string.len(ARGV[1])+1)
+            """, String.class);
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Duration TOKEN_TTL = Duration.ofMinutes(30);  // 验证链接有效期30分钟
@@ -70,6 +82,7 @@ public class EmailService {
      * @param purpose  邮件用途（验证或绑定）
      */
     public void sendVerificationLink(String email, Long userId, String clientIp, EmailPurpose purpose) {
+        if (userId == null || userId <= 0 || purpose == null) throw new BizException(BizCode.PARAM_INVALID);
         // 验证邮箱格式
         if (email == null || email.isBlank() || !EMAIL_PATTERN.matcher(email).matches()) {
             throw new BizException(BizCode.EMAIL_INVALID);
@@ -92,7 +105,8 @@ public class EmailService {
 
         try {
             // 构建验证链接
-            String verifyUrl = baseUrl + "/auth/verifyEmail?token=" + token;
+            String verifyUrl = baseUrl + (purpose == EmailPurpose.RECOVERY
+                    ? "/auth/password-recovery?token=" : "/auth/verifyEmail?token=") + token;
 
             // 发送邮件
             MimeMessage message = mailSender.createMimeMessage();
@@ -105,28 +119,32 @@ public class EmailService {
             if (purpose == EmailPurpose.VERIFICATION) {
                 helper.setSubject("SDU邮箱身份验证 - EatWhat");
                 helper.setText(buildVerificationEmailContent(verifyUrl), true);
+            } else if (purpose == EmailPurpose.RECOVERY) {
+                helper.setSubject("账号密码恢复 - EatWhat");
+                helper.setText("请在发起恢复的站点使用以下一次性令牌完成密码恢复（30分钟内有效）：\n" + token
+                        + "\n如果不是您发起的操作，请忽略此邮件。", false);
             } else {
                 helper.setSubject("邮箱绑定验证 - EatWhat");
                 helper.setText(buildBindingEmailContent(verifyUrl), true);
             }
 
+            redis.opsForValue().set(keyToken(token), purpose.name() + ":" + userId + ":" + email, TOKEN_TTL);
             mailSender.send(message);
 
             log.info("邮箱验证链接已发送: email={}, userId={}, ip={}", email, userId, clientIp);
 
         } catch (MessagingException e) {
+            redis.delete(keyToken(token));
             redis.delete(limitKey);
             log.error("邮件发送失败: email={}, error={}", email, e.getMessage(), e);
             throw new BizException(BizCode.THIRD_PARTY_UNAVAILABLE, "邮件发送失败");
         } catch (Exception e) {
+            redis.delete(keyToken(token));
             redis.delete(limitKey);
             log.error("邮件发送异常: email={}, error={}", email, e.getMessage(), e);
             throw new BizException(BizCode.UNKNOWN_ERROR, "邮件发送异常");
         }
 
-        String tokenKey = keyToken(token);
-        String tokenData = userId + ":" + email;
-        redis.opsForValue().set(tokenKey, tokenData, TOKEN_TTL);
     }
 
     /**
@@ -136,31 +154,25 @@ public class EmailService {
      * @return 包含userId和email的数组 [userId, email]
      */
     public EmailVerification verifyToken(String token) {
-        if (token == null || token.isBlank()) {
-            throw new BizException(BizCode.PARAM_MISSING, "验证token不能为空");
-        }
+        return verifyToken(token, EmailPurpose.VERIFICATION);
+    }
 
-        String tokenKey = keyToken(token);
-        String tokenData = redis.opsForValue().get(tokenKey);
-
-        if (tokenData == null) {
+    /** Purpose is checked before atomic consumption; another site cannot address this challenge. */
+    public EmailVerification verifyToken(String token, EmailPurpose expectedPurpose) {
+        if (token == null || !token.matches("[0-9a-f]{64}") || expectedPurpose == null) {
             throw new BizException(BizCode.EMAIL_TOKEN_INVALID);
         }
-
-        // 解析token数据
-        String[] parts = tokenData.split(":", 2);
-        if (parts.length != 2) {
-            redis.delete(tokenKey);
+        String data = redis.execute(CONSUME, List.of(keyToken(token)), expectedPurpose.name() + ":");
+        if (data == null) throw new BizException(BizCode.EMAIL_TOKEN_INVALID);
+        String[] parts = data.split(":", 2);
+        try {
+            if (parts.length != 2 || parts[1].isBlank()) throw new IllegalArgumentException();
+            long userId = Long.parseLong(parts[0]);
+            if (userId <= 0) throw new IllegalArgumentException();
+            return new EmailVerification(userId, parts[1]);
+        } catch (IllegalArgumentException invalid) {
             throw new BizException(BizCode.EMAIL_TOKEN_INVALID);
         }
-
-        Long userId = Long.parseLong(parts[0]);
-        String email = parts[1];
-
-        // 验证成功后删除token
-        redis.delete(tokenKey);
-
-        return new EmailVerification(userId, email);
     }
 
     /**
@@ -245,17 +257,17 @@ public class EmailService {
         if (email == null) {
             return false;
         }
-        String lowerEmail = email.toLowerCase();
+        String lowerEmail = email.toLowerCase(Locale.ROOT);
         return lowerEmail.endsWith(SDU_EMAIL_DOMAIN_1) || lowerEmail.endsWith(SDU_EMAIL_DOMAIN_2);
     }
 
     // Redis keys
-    private static String keyToken(String token) {
-        return "email:token:" + token;
+    private String keyToken(String token) {
+        return "email:v2:" + siteId + ":token:" + token;
     }
 
-    private static String keyLimit(String email) {
-        return "email:limit:" + email;
+    private String keyLimit(String email) {
+        return "email:v2:" + siteId + ":limit:" + email.toLowerCase(Locale.ROOT);
     }
 
     public record EmailVerification(Long userId, String email) {}

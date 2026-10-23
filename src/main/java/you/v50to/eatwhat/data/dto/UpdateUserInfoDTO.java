@@ -12,9 +12,10 @@ import java.time.LocalDate;
 public class UpdateUserInfoDTO {
 
     /**
-     * 昵称
+     * 昵称：可以用中文，不要求唯一。字段名沿用 userName，不影响登录。
      */
-    @Size(min = 3, max = 10, message = "昵称长度必须在 3 到 10 个字符之间")
+    @Size(min = 2, max = 12, message = "昵称长度必须在 2 到 12 个字之间")
+    @Pattern(regexp = "^\\S(.*\\S)?$", message = "昵称首尾不能是空白")
     private String userName;
 
     /**

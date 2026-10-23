@@ -27,7 +27,7 @@ public interface FoodFavoriteMapper extends BaseMapper<FoodFavorite> {
                                      @Param("foodIds") List<Long> foodIds);
 
     @Select("""
-            SELECT f.*, u.nick_name AS uploaderName
+            SELECT f.*, COALESCE(u.display_name, u.nick_name) AS uploaderName
             FROM food_favorites ff
             JOIN foods f ON f.id = ff.food_id
             JOIN users u ON u.id = f.account_id
@@ -38,6 +38,8 @@ public interface FoodFavoriteMapper extends BaseMapper<FoodFavorite> {
     @Results(value = {
             @Result(property = "uploaderName", column = "uploaderName"),
             @Result(property = "pictureUrl", column = "picture_url", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "mealTimes", column = "meal_times", typeHandler = StringArrayTypeHandler.class),
+            @Result(property = "stageAlternates", column = "stage_alternates", typeHandler = StringArrayTypeHandler.class),
             @Result(property = "createdAt", column = "created_at", typeHandler = TimestampTypeHandler.class),
             @Result(property = "updatedAt", column = "updated_at", typeHandler = TimestampTypeHandler.class)
     })

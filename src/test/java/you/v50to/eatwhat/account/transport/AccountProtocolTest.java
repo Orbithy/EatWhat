@@ -26,7 +26,9 @@ class AccountProtocolTest {
 
     @Test
     void everyOperationRoundTripsAndSensitiveFrameAndFailureStringsAreRedacted() {
-        for (String operation : List.of("authenticate", "register", "grant", "withdraw", "project")) {
+        for (String operation : List.of("authenticate", "register", "grant", "withdraw", "project",
+                "sms-reserve", "sms-release", "sms-store", "sms-verify",
+                "email-reserve", "email-release", "email-store", "email-discard", "email-consume")) {
             var body = json.createObjectNode().put("password", "synthetic-password-sentinel");
             var frame = new AccountProtocol.Frame(1, UUID.randomUUID(), campus, external, now, operation, body);
             body.put("password", "changed-after-construction");

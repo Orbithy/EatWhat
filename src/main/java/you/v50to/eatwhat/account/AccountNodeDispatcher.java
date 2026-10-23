@@ -11,6 +11,8 @@ import java.util.UUID;
 /** Role-specific RPC dispatch after the transport has authenticated and bound the peer identity. */
 public final class AccountNodeDispatcher implements AccountRequestHandler {
     @org.springframework.beans.factory.annotation.Autowired(required=false) private you.v50to.eatwhat.account.multiwriter.MultiwriterExchange multiwriter;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private you.v50to.eatwhat.service.SmsService sms;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private you.v50to.eatwhat.service.EmailService email;
     private final SiteProperties site;
     private final ConsentStore store;
     private final AccountAuthService authentication;
@@ -21,6 +23,8 @@ public final class AccountNodeDispatcher implements AccountRequestHandler {
     }
 
     @Override public JsonNode handle(String operation, JsonNode body) {
+        if(operation.startsWith("email-")){if(email==null)throw new IllegalStateException("EMAIL_CHALLENGE_NOT_ACTIVE");return email.handleChallenge(operation,body);}
+        if(operation.startsWith("sms-")){if(sms==null)throw new IllegalStateException("SMS_CHALLENGE_NOT_ACTIVE");return sms.handleChallenge(operation,body);}
         if(operation.equals("multiwriter-capabilities"))return multiwriter==null?json.createObjectNode().put("schemaVersion",2).put("active",false):multiwriter.capabilities();
         if(operation.equals("multiwriter-exchange")){if(multiwriter==null)throw new IllegalStateException("ACCOUNT_MULTIWRITER_NOT_ACTIVE");return multiwriter.receive(body);}
         if (site.getMode() == SiteProperties.Mode.CAMPUS) {

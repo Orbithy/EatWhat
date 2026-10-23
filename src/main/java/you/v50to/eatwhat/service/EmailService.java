@@ -4,7 +4,10 @@ import jakarta.annotation.Resource;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -53,6 +56,11 @@ public class EmailService {
     @Value("${app.site.id:legacy}")
     private String siteId = "legacy";
 
+    /** Present only in a bound multi-site cluster; routes each token and send interval to the single site that owns it. */
+    @Autowired(required = false)
+    private ChallengePeers peers;
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
     private static final DefaultRedisScript<String> CONSUME = new DefaultRedisScript<>("""
             local value = redis.call('GET', KEYS[1])
             if not value or string.sub(value,1,string.len(ARGV[1])) ~= ARGV[1] then return nil end
@@ -94,14 +102,20 @@ public class EmailService {
         }
 
         // 发送频率限制
-        String limitKey = keyLimit(email);
-        Boolean ok = redis.opsForValue().setIfAbsent(limitKey, "1", SEND_LIMIT_TTL);
-        if (ok == null || !ok) {
+        String limitOwner = ownerOf("email-limit|" + email.toLowerCase(Locale.ROOT));
+        if (!reserve(limitOwner, email)) {
             throw new BizException(BizCode.TOO_MANY_REQUESTS, "请求过于频繁，请稍后再试");
         }
 
         // 生成验证token
         String token = generateToken();
+        String tokenOwner;
+        try {
+            tokenOwner = ownerOf("email-token|" + token);
+        } catch (RuntimeException e) {
+            release(limitOwner, email);
+            throw e;
+        }
 
         try {
             // 构建验证链接
@@ -128,19 +142,23 @@ public class EmailService {
                 helper.setText(buildBindingEmailContent(verifyUrl), true);
             }
 
-            redis.opsForValue().set(keyToken(token), purpose.name() + ":" + userId + ":" + email, TOKEN_TTL);
+            store(tokenOwner, token, purpose.name() + ":" + userId + ":" + email);
             mailSender.send(message);
 
             log.info("邮箱验证链接已发送: email={}, userId={}, ip={}", email, userId, clientIp);
 
+        } catch (BizException e) {
+            discard(tokenOwner, token);
+            release(limitOwner, email);
+            throw e;
         } catch (MessagingException e) {
-            redis.delete(keyToken(token));
-            redis.delete(limitKey);
+            discard(tokenOwner, token);
+            release(limitOwner, email);
             log.error("邮件发送失败: email={}, error={}", email, e.getMessage(), e);
             throw new BizException(BizCode.THIRD_PARTY_UNAVAILABLE, "邮件发送失败");
         } catch (Exception e) {
-            redis.delete(keyToken(token));
-            redis.delete(limitKey);
+            discard(tokenOwner, token);
+            release(limitOwner, email);
             log.error("邮件发送异常: email={}, error={}", email, e.getMessage(), e);
             throw new BizException(BizCode.UNKNOWN_ERROR, "邮件发送异常");
         }
@@ -157,12 +175,13 @@ public class EmailService {
         return verifyToken(token, EmailPurpose.VERIFICATION);
     }
 
-    /** Purpose is checked before atomic consumption; another site cannot address this challenge. */
+    /** Purpose is checked before atomic consumption at the owning site. */
     public EmailVerification verifyToken(String token, EmailPurpose expectedPurpose) {
         if (token == null || !token.matches("[0-9a-f]{64}") || expectedPurpose == null) {
             throw new BizException(BizCode.EMAIL_TOKEN_INVALID);
         }
-        String data = redis.execute(CONSUME, List.of(keyToken(token)), expectedPurpose.name() + ":");
+        String owner = ownerOf("email-token|" + token);
+        String data = isRemote(owner) ? consumeRemote(owner, token, expectedPurpose) : consumeLocal(token, expectedPurpose);
         if (data == null) throw new BizException(BizCode.EMAIL_TOKEN_INVALID);
         String[] parts = data.split(":", 2);
         try {
@@ -259,6 +278,117 @@ public class EmailService {
         }
         String lowerEmail = email.toLowerCase(Locale.ROOT);
         return lowerEmail.endsWith(SDU_EMAIL_DOMAIN_1) || lowerEmail.endsWith(SDU_EMAIL_DOMAIN_2);
+    }
+
+    // ---- 令牌归属站点：令牌与发送间隔只存在归属站点，另一站点经站点间通道转发 ----
+
+    private String ownerOf(String routingKey) {
+        if (peers == null) return siteId;
+        try {
+            String owner = peers.ownerOf(routingKey);
+            if (owner == null || owner.isBlank()) throw new IllegalStateException("Missing challenge owner");
+            return owner;
+        } catch (RuntimeException e) {
+            throw unavailable(e);
+        }
+    }
+
+    private boolean isRemote(String owner) { return peers != null && !owner.equals(siteId); }
+
+    private static BizException unavailable(Exception cause) {
+        log.warn("邮件令牌归属站点不可用: {}", cause.getClass().getSimpleName());
+        return new BizException(BizCode.THIRD_PARTY_UNAVAILABLE, "验证服务暂不可用，请稍后再试");
+    }
+
+    private JsonNode callOwner(String owner, String operation, java.util.Map<String, String> fields) {
+        var body = JSON.createObjectNode();
+        fields.forEach(body::put);
+        try {
+            return peers.call(owner, operation, body);
+        } catch (BizException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw unavailable(e);
+        }
+    }
+
+    private boolean reserve(String owner, String email) {
+        if (isRemote(owner)) return callOwner(owner, "email-reserve", java.util.Map.of("email", email)).path("ok").asBoolean(false);
+        Boolean ok = redis.opsForValue().setIfAbsent(keyLimit(email), "1", SEND_LIMIT_TTL);
+        return ok != null && ok;
+    }
+
+    private void release(String owner, String email) {
+        if (!isRemote(owner)) { redis.delete(keyLimit(email)); return; }
+        try { callOwner(owner, "email-release", java.util.Map.of("email", email)); }
+        catch (BizException e) { log.warn("释放邮件发送间隔失败"); }
+    }
+
+    private void store(String owner, String token, String value) {
+        if (!isRemote(owner)) { redis.opsForValue().set(keyToken(token), value, TOKEN_TTL); return; }
+        if (!callOwner(owner, "email-store", java.util.Map.of("token", token, "value", value)).path("ok").asBoolean(false)) {
+            throw new BizException(BizCode.THIRD_PARTY_UNAVAILABLE, "验证服务暂不可用，请稍后再试");
+        }
+    }
+
+    private void discard(String owner, String token) {
+        if (!isRemote(owner)) { redis.delete(keyToken(token)); return; }
+        try { callOwner(owner, "email-discard", java.util.Map.of("token", token)); }
+        catch (BizException e) { log.warn("清理邮件令牌失败"); }
+    }
+
+    private String consumeLocal(String token, EmailPurpose purpose) {
+        return redis.execute(CONSUME, List.of(keyToken(token)), purpose.name() + ":");
+    }
+
+    private String consumeRemote(String owner, String token, EmailPurpose purpose) {
+        JsonNode data = callOwner(owner, "email-consume", java.util.Map.of("token", token, "purpose", purpose.name())).path("data");
+        return data.isString() ? data.stringValue() : null;
+    }
+
+    /** 站点间调用入口：只处理归属本站点的令牌和发送间隔，归属不一致一律拒绝，保证单次使用与限流只在一处计数。 */
+    public JsonNode handleChallenge(String operation, JsonNode body) {
+        if (peers == null || body == null || !body.isObject()) throw new IllegalArgumentException("E-mail challenge not active");
+        var reply = JSON.createObjectNode();
+        switch (operation) {
+            case "email-reserve", "email-release" -> {
+                String email = body.path("email").asString("");
+                if (email.isBlank() || email.length() > 320 || !EMAIL_PATTERN.matcher(email).matches()) throw new IllegalArgumentException("Invalid e-mail");
+                requireOwner("email-limit|" + email.toLowerCase(Locale.ROOT));
+                if (operation.equals("email-reserve")) {
+                    Boolean ok = redis.opsForValue().setIfAbsent(keyLimit(email), "1", SEND_LIMIT_TTL);
+                    reply.put("ok", ok != null && ok);
+                } else {
+                    redis.delete(keyLimit(email));
+                    reply.put("ok", true);
+                }
+            }
+            case "email-store", "email-discard", "email-consume" -> {
+                String token = body.path("token").asString("");
+                if (!token.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid token");
+                requireOwner("email-token|" + token);
+                switch (operation) {
+                    case "email-store" -> {
+                        String value = body.path("value").asString("");
+                        if (!value.matches("(VERIFICATION|BINDING|RECOVERY):[1-9][0-9]{0,18}:.{1,320}")) throw new IllegalArgumentException("Invalid challenge");
+                        redis.opsForValue().set(keyToken(token), value, TOKEN_TTL);
+                        reply.put("ok", true);
+                    }
+                    case "email-discard" -> { redis.delete(keyToken(token)); reply.put("ok", true); }
+                    default -> {
+                        EmailPurpose purpose = EmailPurpose.valueOf(body.path("purpose").asString(""));
+                        String data = consumeLocal(token, purpose);
+                        if (data == null) reply.putNull("data"); else reply.put("data", data);
+                    }
+                }
+            }
+            default -> throw new IllegalArgumentException("Unknown e-mail challenge operation");
+        }
+        return reply;
+    }
+
+    private void requireOwner(String routingKey) {
+        if (!siteId.equals(peers.ownerOf(routingKey))) throw new IllegalArgumentException("E-mail challenge routed to the wrong site");
     }
 
     // Redis keys

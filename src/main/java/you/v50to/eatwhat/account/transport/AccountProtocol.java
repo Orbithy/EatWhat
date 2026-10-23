@@ -21,7 +21,7 @@ public final class AccountProtocol {
     public static final int VERSION = 1;
     public static final int MAX_BODY_BYTES = 256 * 1024;
     public static final String PATH = "/internal/account/v1/rpc";
-    private static final Set<String> OPERATIONS = Set.of("authenticate", "register", "grant", "withdraw", "project","session-register","session-authorize","session-revoke","multiwriter-capabilities","multiwriter-exchange");
+    private static final Set<String> OPERATIONS = Set.of("authenticate", "register", "grant", "withdraw", "project","session-register","session-authorize","session-revoke","multiwriter-capabilities","multiwriter-exchange","sms-reserve","sms-release","sms-store","sms-verify","email-reserve","email-release","email-store","email-discard","email-consume");
     private static final Set<String> FIELDS = Set.of("version", "requestId", "sender", "receiver", "issuedAt", "operation", "body");
     private static final JsonMapper JSON = JsonMapper.builder(JsonFactory.builder()
                     .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)

@@ -1,6 +1,9 @@
 package you.v50to.eatwhat.service;
 
 import cn.dev33.satoken.stp.StpUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import java.util.List;
@@ -54,6 +57,10 @@ public class SmsService {
 
     @Value("${app.site.id:legacy}")
     private String siteId = "legacy";
+    /** Present only in a bound multi-site cluster; routes each challenge to the single site that owns its state. */
+    @Autowired(required = false)
+    private ChallengePeers peers;
+    private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final DefaultRedisScript<Long> STORE = new DefaultRedisScript<>("""
             redis.call('SET',KEYS[1],ARGV[1],'EX',ARGV[2])
             redis.call('SET',KEYS[2],'0','EX',ARGV[2])
@@ -108,11 +115,10 @@ public class SmsService {
             applyIpRateLimit(scene, clientIp);
         }
 
-        String limitKey = keyLimit(scene, mobile);
+        String owner = ownerSite(scene, mobile);
 
-        // 同手机号发送频率限制：60秒一次
-        Boolean ok = redis.opsForValue().setIfAbsent(limitKey, "1", SEND_LIMIT_TTL);
-        if (ok == null || !ok) {
+        // 同手机号发送频率限制：60秒一次（由验证码归属站点统一计数）
+        if (!reserve(owner, scene, mobile)) {
             throw new BizException(BizCode.TOO_MANY_REQUESTS, "请求过于频繁，请稍后再试");
         }
 
@@ -153,17 +159,16 @@ public class SmsService {
                 throw new BizException(BizCode.THIRD_PARTY_BAD_RESPONSE, "短信发送失败：" + (resp == null ? "null response" : resp.getErrorMessage()));
             }
         } catch (RuntimeException e) {
-            redis.delete(limitKey);
+            release(owner, scene, mobile);
             throw e;
         } catch (Exception e) {
-            redis.delete(limitKey);
+            release(owner, scene, mobile);
             log.error("短信发送异常：{}", e.getMessage(), e);
             throw new BizException(BizCode.UNKNOWN_ERROR, "短信发送异常：" + e.getMessage());
         }
 
         String salt = UUID.randomUUID().toString();
-        redis.execute(STORE, List.of(keyCode(scene, mobile, actor), keyFailCount(scene, mobile, actor)),
-                salt + ":" + hashCode(scene, mobile, actor, salt, code), String.valueOf(CODE_TTL.toSeconds()));
+        store(owner, scene, mobile, actor, salt + ":" + hashCode(owner, scene, mobile, actor, salt, code));
     }
 
     public boolean verifyCode(Scene scene, String mobile, String inputCode) {
@@ -182,12 +187,9 @@ public class SmsService {
     private boolean verify(Scene scene, String mobile, String inputCode, String actor) {
         validate(scene, mobile);
         if (inputCode == null || inputCode.isBlank()) throw new BizException(BizCode.PARAM_MISSING, "验证码不能为空");
-        String codeKey = keyCode(scene, mobile, actor);
-        String stored = redis.opsForValue().get(codeKey);
-        if (stored == null || !stored.contains(":")) throw new BizException(BizCode.PARAM_INVALID, "验证码已过期或不存在");
-        String salt = stored.substring(0, stored.indexOf(':'));
-        Long result = redis.execute(CONSUME, List.of(codeKey, keyFailCount(scene, mobile, actor)), stored,
-                salt + ":" + hashCode(scene, mobile, actor, salt, inputCode), String.valueOf(MAX_VERIFY_FAILS));
+        String owner = ownerSite(scene, mobile);
+        Long result = isRemote(owner) ? consumeRemote(owner, scene, mobile, actor, inputCode)
+                : consumeLocal(scene, mobile, actor, inputCode);
         if (Long.valueOf(1).equals(result)) return true;
         if (Long.valueOf(-2).equals(result)) throw new BizException(BizCode.TOO_MANY_REQUESTS, "验证码错误次数过多，请稍后再试");
         if (Long.valueOf(0).equals(result)) throw new BizException(BizCode.VERIFY_CODE_ERROR);
@@ -226,25 +228,136 @@ public class SmsService {
         }
     }
 
-    // Both keys use the same Redis slot; account, purpose, destination and issuer are bound.
+    // Both keys use the same Redis slot; account, purpose, destination and owning site are bound.
     // Anonymous login challenges use a non-numeric actor so they never collide with an account-bound one.
-    private String challengeKey(Scene scene, String mobile, String actor) {
-        return "sms:v2:{" + siteId + ":" + actor + ":" + scene + ":" + mobile + "}";
+    private static String challengeKey(String site, Scene scene, String mobile, String actor) {
+        return "sms:v2:{" + site + ":" + actor + ":" + scene + ":" + mobile + "}";
     }
-    private String keyCode(Scene scene, String mobile, String actor) { return challengeKey(scene,mobile,actor) + ":code"; }
-    private String keyFailCount(Scene scene, String mobile, String actor) { return challengeKey(scene,mobile,actor) + ":cnt"; }
-    private String keyLimit(Scene scene, String mobile) { return "sms:v2:" + siteId + ":limit:" + scene + ":" + mobile; }
+    private static String keyCode(String site, Scene scene, String mobile, String actor) { return challengeKey(site,scene,mobile,actor) + ":code"; }
+    private static String keyFailCount(String site, Scene scene, String mobile, String actor) { return challengeKey(site,scene,mobile,actor) + ":cnt"; }
+    private static String keyLimit(String site, Scene scene, String mobile) { return "sms:v2:" + site + ":limit:" + scene + ":" + mobile; }
     private String keyIpLimit(Scene scene, String ip) { return "sms:v2:" + siteId + ":ip:" + scene + ":" + ip; }
 
-    private String hashCode(Scene scene, String mobile, String actor, String salt, String code) {
+    private static String hashCode(String site, Scene scene, String mobile, String actor, String salt, String code) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            String raw = siteId + "|" + actor + "|" + scene + "|" + mobile + "|" + salt + "|" + code;
+            String raw = site + "|" + actor + "|" + scene + "|" + mobile + "|" + salt + "|" + code;
             return HexFormat.of().formatHex(md.digest(raw.getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
         }
     }
+
+    // ---- 验证码归属站点：状态（验证码、错误次数、发送间隔）只存在归属站点，另一站点经站点间通道转发 ----
+
+    private String ownerSite(Scene scene, String mobile) {
+        if (peers == null) return siteId;
+        try {
+            String owner = peers.owner(scene, mobile);
+            if (owner == null || owner.isBlank()) throw new IllegalStateException("Missing challenge owner");
+            return owner;
+        } catch (BizException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw unavailable(e);
+        }
+    }
+
+    private boolean isRemote(String owner) { return peers != null && !owner.equals(siteId); }
+
+    private static BizException unavailable(Exception cause) {
+        log.warn("验证码归属站点不可用: {}", cause.getClass().getSimpleName());
+        return new BizException(BizCode.THIRD_PARTY_UNAVAILABLE, "验证码服务暂不可用，请稍后再试");
+    }
+
+    private JsonNode callOwner(String owner, String operation, Scene scene, String mobile, String actor, String extraName, String extra) {
+        var body = JSON.createObjectNode().put("scene", scene.name()).put("mobile", mobile);
+        if (actor != null) body.put("actor", actor);
+        if (extraName != null) body.put(extraName, extra);
+        try {
+            return peers.call(owner, operation, body);
+        } catch (BizException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw unavailable(e);
+        }
+    }
+
+    private boolean reserve(String owner, Scene scene, String mobile) {
+        if (isRemote(owner)) return callOwner(owner, "sms-reserve", scene, mobile, null, null, null).path("ok").asBoolean(false);
+        return reserveLocal(scene, mobile);
+    }
+
+    private void release(String owner, Scene scene, String mobile) {
+        if (!isRemote(owner)) { releaseLocal(scene, mobile); return; }
+        try { callOwner(owner, "sms-release", scene, mobile, null, null, null); }
+        catch (BizException e) { log.warn("释放验证码发送间隔失败"); }
+    }
+
+    private void store(String owner, Scene scene, String mobile, String actor, String value) {
+        if (!isRemote(owner)) { storeLocal(scene, mobile, actor, value); return; }
+        if (!callOwner(owner, "sms-store", scene, mobile, actor, "value", value).path("ok").asBoolean(false)) {
+            throw new BizException(BizCode.THIRD_PARTY_UNAVAILABLE, "验证码服务暂不可用，请稍后再试");
+        }
+    }
+
+    private Long consumeRemote(String owner, Scene scene, String mobile, String actor, String input) {
+        JsonNode reply = callOwner(owner, "sms-verify", scene, mobile, actor, "code", input);
+        return reply.path("result").isIntegralNumber() ? reply.path("result").asLong() : -1L;
+    }
+
+    private boolean reserveLocal(Scene scene, String mobile) {
+        Boolean ok = redis.opsForValue().setIfAbsent(keyLimit(siteId, scene, mobile), "1", SEND_LIMIT_TTL);
+        return ok != null && ok;
+    }
+
+    private void releaseLocal(Scene scene, String mobile) { redis.delete(keyLimit(siteId, scene, mobile)); }
+
+    private void storeLocal(Scene scene, String mobile, String actor, String value) {
+        redis.execute(STORE, List.of(keyCode(siteId, scene, mobile, actor), keyFailCount(siteId, scene, mobile, actor)),
+                value, String.valueOf(CODE_TTL.toSeconds()));
+    }
+
+    /** 1 成功并消费，0 错误，-1 不存在或已过期，-2 错误次数已满。 */
+    private Long consumeLocal(Scene scene, String mobile, String actor, String input) {
+        String codeKey = keyCode(siteId, scene, mobile, actor);
+        String stored = redis.opsForValue().get(codeKey);
+        if (stored == null || !stored.contains(":")) return -1L;
+        String salt = stored.substring(0, stored.indexOf(':'));
+        return redis.execute(CONSUME, List.of(codeKey, keyFailCount(siteId, scene, mobile, actor)), stored,
+                salt + ":" + hashCode(siteId, scene, mobile, actor, salt, input), String.valueOf(MAX_VERIFY_FAILS));
+    }
+
+    /** 站点间调用入口：只处理归属本站点的验证码，归属不一致一律拒绝，避免错误次数被拆到两个站点。 */
+    public JsonNode handleChallenge(String operation, JsonNode body) {
+        if (peers == null || body == null || !body.isObject()) throw new IllegalArgumentException("SMS challenge not active");
+        Scene scene = Scene.valueOf(body.path("scene").asString(""));
+        String mobile = body.path("mobile").asString("");
+        validate(scene, mobile);
+        String actor = body.has("actor") ? body.path("actor").asString("") : null;
+        if (actor != null && !ANONYMOUS_ACTOR.equals(actor) && !actor.matches("[1-9][0-9]{0,18}")) throw new IllegalArgumentException("Invalid actor");
+        if (!siteId.equals(peers.owner(scene, mobile))) throw new IllegalArgumentException("SMS challenge routed to the wrong site");
+        var reply = JSON.createObjectNode();
+        switch (operation) {
+            case "sms-reserve" -> reply.put("ok", reserveLocal(scene, mobile));
+            case "sms-release" -> { releaseLocal(scene, mobile); reply.put("ok", true); }
+            case "sms-store" -> {
+                String value = body.path("value").asString("");
+                if (actor == null || !value.matches("[0-9a-f-]{36}:[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid challenge");
+                storeLocal(scene, mobile, actor, value);
+                reply.put("ok", true);
+            }
+            case "sms-verify" -> {
+                String code = body.path("code").asString("");
+                if (actor == null || code.isBlank() || code.length() > 16) throw new IllegalArgumentException("Invalid challenge");
+                Long result = consumeLocal(scene, mobile, actor, code);
+                reply.put("result", result == null ? -1L : result);
+            }
+            default -> throw new IllegalArgumentException("Unknown SMS challenge operation");
+        }
+        return reply;
+    }
+
     private void applyGlobalLimit(Scene scene) {
         String minute = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"));
         String key = "sms:v2:" + siteId + ":global:" + scene + ":m:" + minute;

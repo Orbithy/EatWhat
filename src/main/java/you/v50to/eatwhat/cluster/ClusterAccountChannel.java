@@ -49,6 +49,16 @@ public final class ClusterAccountChannel implements AccountChannel {
         }
         return json.createObjectNode().put("status","APPLIED");
     }
+    /** Online call to one named member: the authority for a secondary, the member's own profile for the coordinator. */
+    public JsonNode callSite(String siteId,String operation,JsonNode body){
+        if(!properties.isCoordinator()){
+            if(!siteId.equals(properties.getAuthoritySiteId()))throw new AccountUnavailableException();
+            return call(operation,body);
+        }
+        var member=membership.current().stream().filter(m->m.siteId().equals(siteId)&&!m.identity().equals(local)).findFirst().orElseThrow(AccountUnavailableException::new);
+        var target=profile(member);
+        return request(target.baseUri(),member.identity(),ControlAudit.token(target.tokenFile()),operation,body,profileClient(target,client));
+    }
     ClusterProfiles.Entry profile(ClusterMember member){return profiles.getObject().list().stream().filter(p->p.get("siteId").equals(member.siteId())).map(p->profiles.getObject().get((String)p.get("id"))).filter(p->p.member().equals(member)).findFirst().orElseThrow(AccountUnavailableException::new);}
     /** The deployed profile API predates scoped trust. Only an absent method uses its existing client. */
     static HttpClient profileClient(Object profile,HttpClient fallback){

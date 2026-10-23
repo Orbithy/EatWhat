@@ -1,16 +1,24 @@
 package you.v50to.eatwhat.controller;
 
-import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
-import you.v50to.eatwhat.data.dto.*;
+import you.v50to.eatwhat.data.dto.CreateActivityPostDTO;
+import you.v50to.eatwhat.data.enums.BizCode;
+import you.v50to.eatwhat.data.vo.ActivityPostVO;
+import you.v50to.eatwhat.data.vo.ActivityVO;
+import you.v50to.eatwhat.data.vo.CreatedResourceVO;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.service.ActivityService;
 
-@SaCheckLogin
+import java.util.List;
+
+/**
+ * 通用活动接口：app 先取活动列表，再按活动 code 读取和发布内容。
+ * 活动由管理员在 {@link ActivityAdminController} 创建和上下线，新增活动不需要发版。
+ */
 @RestController
 @RequestMapping("/activity")
 public class ActivityController {
@@ -19,135 +27,85 @@ public class ActivityController {
     private ActivityService activityService;
 
     /**
-     * 发布地域性美食
-     * 仅通过认证（verified）的用户可发布
+     * 获取已上线的活动列表
+     * 游客可访问
+     */
+    @GetMapping("/list")
+    public Result<List<ActivityVO>> list() {
+        return activityService.listOnline();
+    }
+
+    /**
+     * 获取活动详情（含扩展字段定义）
+     * 游客可访问；已下线的活动仍可读取，草稿不可见
+     */
+    @GetMapping("/{code}")
+    public Result<ActivityVO> detail(@PathVariable String code) {
+        return activityService.getActivity(code);
+    }
+
+    /**
+     * 分页获取活动下的内容
+     * 游客可访问；登录后返回个人点赞状态。sort 为 NEWEST（默认，按时间倒序）或 LIKES（按点赞数）
+     */
+    @GetMapping("/{code}/posts")
+    public Result<PageResult<ActivityPostVO>> listPosts(
+            @PathVariable String code,
+            @RequestParam(defaultValue = "NEWEST") String sort,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        if (!"NEWEST".equals(sort) && !"LIKES".equals(sort)) {
+            return Result.fail(BizCode.PARAM_INVALID, "sort 只能是 NEWEST 或 LIKES");
+        }
+        return activityService.listPosts(code, sort, page, pageSize);
+    }
+
+    /**
+     * 在活动下发布内容
+     * 仅通过认证（verified）的用户可发布；活动需已上线且在发布时间内
      */
     @SaCheckRole("verified")
-    @PostMapping("/foods")
-    public Result<Void> publishFood(@Valid @RequestBody CreateActivityFoodDTO dto) {
-        return activityService.publishFood(dto);
+    @PostMapping("/{code}/posts")
+    public Result<CreatedResourceVO> publish(@PathVariable String code, @Valid @RequestBody CreateActivityPostDTO dto) {
+        return activityService.publishPost(code, dto);
     }
 
     /**
-     * 分页获取美食列表
-     * 仅登录用户可访问
+     * 获取内容详情
+     * 游客可访问；登录后返回个人点赞状态
      */
-    @GetMapping("/foods")
-    public Result<PageResult<ActivityFoodDTO>> listFoods(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer pageSize) {
-        return activityService.listFoods(page, pageSize);
+    @GetMapping("/posts/{id}")
+    public Result<ActivityPostVO> postDetail(@PathVariable Long id) {
+        return activityService.getPost(id);
     }
 
     /**
-     * 按点赞数分页获取美食列表
-     * 仅登录用户可访问
-     */
-    @GetMapping("/foods/by-likes")
-    public Result<PageResult<ActivityFoodDTO>> listFoodsByLikes(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer pageSize) {
-        return activityService.listFoodsByLikes(page, pageSize);
-    }
-
-    /**
-     * 获取美食详情
-     * 仅登录用户可访问
-     */
-    @GetMapping("/foods/{id}")
-    public Result<ActivityFoodDTO> getFoodDetail(@PathVariable Long id) {
-        return activityService.getFoodDetail(id);
-    }
-
-    /**
-     * 软删除自己发布的美食
+     * 删除自己发布的内容（软删除）
      * 仅通过认证（verified）的用户可操作
      */
     @SaCheckRole("verified")
-    @DeleteMapping("/foods/{id}")
-    public Result<Void> deleteFood(@PathVariable Long id) {
-        return activityService.deleteFood(id);
+    @DeleteMapping("/posts/{id}")
+    public Result<Void> deletePost(@PathVariable Long id) {
+        return activityService.deletePost(id);
     }
 
     /**
-     * 发布年夜饭
-     * 仅通过认证（verified）的用户可发布
-     */
-    @SaCheckRole("verified")
-    @PostMapping("/dinners")
-    public Result<Void> publishDinner(@Valid @RequestBody CreateActivityDinnerDTO dto) {
-        return activityService.publishDinner(dto);
-    }
-
-    /**
-     * 分页获取年夜饭列表
-     * 仅登录用户可访问
-     */
-    @GetMapping("/dinners")
-    public Result<PageResult<ActivityDinnerDTO>> listDinners(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer pageSize) {
-        return activityService.listDinners(page, pageSize);
-    }
-
-    /**
-     * 按点赞数分页获取年夜饭列表
-     * 仅登录用户可访问
-     */
-    @GetMapping("/dinners/by-likes")
-    public Result<PageResult<ActivityDinnerDTO>> listDinnersByLikes(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer pageSize) {
-        return activityService.listDinnersByLikes(page, pageSize);
-    }
-
-    /**
-     * 获取年夜饭详情
-     * 仅登录用户可访问
-     */
-    @GetMapping("/dinners/{id}")
-    public Result<ActivityDinnerDTO> getDinnerDetail(@PathVariable Long id) {
-        return activityService.getDinnerDetail(id);
-    }
-
-    /**
-     * 软删除自己发布的年夜饭
+     * 点赞内容
      * 仅通过认证（verified）的用户可操作
      */
     @SaCheckRole("verified")
-    @DeleteMapping("/dinners/{id}")
-    public Result<Void> deleteDinner(@PathVariable Long id) {
-        return activityService.deleteDinner(id);
+    @PostMapping("/posts/{id}/like")
+    public Result<Void> like(@PathVariable Long id) {
+        return activityService.like(id);
     }
 
     /**
-     * 点赞（支持 food/dinner）
-     * 仅通过认证（verified）的用户可操作
+     * 取消点赞
+     * 仅通过认证（verified）的用户可操作；内容不存在或已删除时视为成功
      */
     @SaCheckRole("verified")
-    @PostMapping("/likes")
-    public Result<Void> like(@Valid @RequestBody ActivityLikeReqDTO dto) {
-        return activityService.like(dto);
-    }
-
-    /**
-     * 取消点赞（支持 food/dinner）
-     * 仅通过认证（verified）的用户可操作
-     */
-    @SaCheckRole("verified")
-    @DeleteMapping("/likes")
-    public Result<Void> unlike(@Valid @RequestBody ActivityLikeReqDTO dto) {
-        return activityService.unlike(dto);
-    }
-
-    /**
-     * 根据省份获取美食
-     */
-    @GetMapping("/{provinceId}/foods")
-    public Result<PageResult<ActivityFoodDTO>> getFoodsByProvinceId(@PathVariable Integer provinceId,
-                                                                    @RequestParam(defaultValue = "1") Integer page,
-                                                                    @RequestParam(defaultValue = "20") Integer pageSize) {
-        return activityService.getFoodsByProvinceId(provinceId, page, pageSize);
-
+    @DeleteMapping("/posts/{id}/like")
+    public Result<Void> unlike(@PathVariable Long id) {
+        return activityService.unlike(id);
     }
 }

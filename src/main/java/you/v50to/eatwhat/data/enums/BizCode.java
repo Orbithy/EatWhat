@@ -18,6 +18,13 @@ public enum BizCode {
     TOKEN_INVALID(20002, "Token 无效"),
     TOKEN_EXPIRED(20003, "Token 已过期"),
     NO_PERMISSION(20004, "权限不足"),
+    CROSS_BORDER_CONSENT_REQUIRED(20005, "需要跨境同步同意"),
+    DATA_SYNC_PENDING(20006, "账号正在等待协调或同步"),
+    AUTH_UNAVAILABLE(20007, "身份验证暂不可用"),
+    CONSENT_PROOF_INVALID(20008, "同意凭证无效或已过期"),
+    CONSENT_POLICY_CHANGED(20009, "同意政策已更新"),
+    ACCOUNT_AUTHORIZATION_EXPIRED(20010, "账号授权已过期，请重新验证"),
+    ACCOUNT_SECURITY_CONFLICT(20011, "账号存在并发密码冲突，请在本站通过已验证邮箱恢复"),
 
     // 3xxxx 用户模块
     USER_NOT_FOUND(30001, "用户不存在"),
@@ -29,6 +36,10 @@ public enum BizCode {
     EMAIL_INVALID(30007, "邮箱格式不正确"),
     EMAIL_TOKEN_INVALID(30008, "邮箱验证链接无效或已过期"),
     EMAIL_NOT_SDU(30009, "仅支持山东大学邮箱（@sdu.edu.cn 或 @mail.sdu.edu.cn）"),
+    PASSWORD_NOT_SET(30010, "这个号码还没设密码，用验证码登录吧"),
+    MOBILE_NOT_BOUND(30011, "还没有绑定手机号"),
+    SSO_STATE_INVALID(30012, "认证链接已失效，请回到 App 重新发起认证"),
+    STUDENT_ID_TAKEN(30013, "这个学号已经认证过其他账号"),
 
     // 4xxxx 业务逻辑错误
     OP_FAILED(40001, "操作失败"),
@@ -41,6 +52,11 @@ public enum BizCode {
     FOOD_NOT_FOUND(40008, "菜品不存在"),
     RESTAURANT_NOT_FOUND(40009, "餐厅不存在"),
     HUB_NOT_FOUND(40010, "商场不存在"),
+    ACTIVITY_NOT_FOUND(40011, "活动不存在"),
+    ACTIVITY_POST_NOT_FOUND(40012, "活动内容不存在"),
+    ACTIVITY_NOT_OPEN(40013, "活动当前不能发布内容"),
+    ACTIVITY_CODE_EXISTS(40014, "活动 code 已存在"),
+    ACTIVITY_HAS_POSTS(40015, "活动已有内容，不能删除，请改为下线"),
 
     // 5xxxx 外部依赖错误
     THIRD_PARTY_UNAVAILABLE(50001, "第三方服务不可用"),

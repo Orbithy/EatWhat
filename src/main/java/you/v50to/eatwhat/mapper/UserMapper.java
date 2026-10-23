@@ -14,7 +14,7 @@ public interface UserMapper extends BaseMapper<User> {
     @Select("""
             SELECT
                 u.id,
-                u.nick_name AS userName,
+                COALESCE(u.display_name, u.nick_name) AS userName,
                 u.avatar,
                 ui.gender,
                 ui.birthday,
@@ -29,7 +29,8 @@ public interface UserMapper extends BaseMapper<User> {
                 v.method,
                 v.student_id AS studentId,
                 v.real_name AS realName,
-                v.verified_email AS verifiedEmail
+                v.verified_email AS verifiedEmail,
+                u.password_hash NOT LIKE '!unset:%' AS hasPassword
             FROM users u
             LEFT JOIN user_info ui ON ui.id = u.id
             LEFT JOIN contacts c ON c.account_id = u.id
@@ -49,6 +50,8 @@ public interface UserMapper extends BaseMapper<User> {
                 (SELECT SUM(likes_count) FROM activity_foods WHERE account_id = #{userId} AND deleted_at IS NULL), 0
             ) + COALESCE(
                 (SELECT SUM(likes_count) FROM activity_dinners WHERE account_id = #{userId} AND deleted_at IS NULL), 0
+            ) + COALESCE(
+                (SELECT SUM(likes_count) FROM activity_posts WHERE account_id = #{userId} AND deleted_at IS NULL), 0
             ) AS total
             """)
     Integer countEarnedLikes(@Param("userId") Long userId);
@@ -61,12 +64,14 @@ public interface UserMapper extends BaseMapper<User> {
      */
     @Select("""
             SELECT
-                u.nick_name AS userName,
+                COALESCE(u.display_name, u.nick_name) AS userName,
                 u.avatar,
                 COALESCE(
                     (SELECT SUM(likes_count) FROM activity_foods WHERE account_id = #{userId} AND deleted_at IS NULL), 0
                 ) + COALESCE(
                     (SELECT SUM(likes_count) FROM activity_dinners WHERE account_id = #{userId} AND deleted_at IS NULL), 0
+                ) + COALESCE(
+                    (SELECT SUM(likes_count) FROM activity_posts WHERE account_id = #{userId} AND deleted_at IS NULL), 0
                 ) AS earnedLikes,
                 (SELECT COUNT(*) FROM follow WHERE target_id = #{userId}) AS fansCount,
                 (SELECT COUNT(*) FROM follow WHERE account_id = #{userId}) AS followingsCount,
@@ -85,7 +90,7 @@ public interface UserMapper extends BaseMapper<User> {
     @Select("""
             SELECT
                 u.id,
-                u.nick_name AS userName,
+                COALESCE(u.display_name, u.nick_name) AS userName,
                 u.avatar,
                 u.role,
                 u.banned,

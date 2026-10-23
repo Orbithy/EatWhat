@@ -3,46 +3,78 @@ package you.v50to.eatwhat.service;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-import you.v50to.eatwhat.data.dto.*;
+import you.v50to.eatwhat.config.sync.ManagedDomainWriteGuard;
+import you.v50to.eatwhat.data.dto.CreateActivityPostDTO;
 import you.v50to.eatwhat.data.enums.BizCode;
-import you.v50to.eatwhat.data.po.ActivityDinner;
-import you.v50to.eatwhat.data.po.ActivityFood;
+import you.v50to.eatwhat.data.enums.UploadBiz;
+import you.v50to.eatwhat.data.po.Activity;
 import you.v50to.eatwhat.data.po.ActivityLike;
+import you.v50to.eatwhat.data.po.ActivityPost;
+import you.v50to.eatwhat.data.vo.ActivityPostVO;
+import you.v50to.eatwhat.data.vo.ActivityVO;
+import you.v50to.eatwhat.data.vo.CreatedResourceVO;
 import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
-import you.v50to.eatwhat.mapper.ActivityDinnerMapper;
-import you.v50to.eatwhat.mapper.ActivityFoodMapper;
 import you.v50to.eatwhat.mapper.ActivityLikeMapper;
+import you.v50to.eatwhat.mapper.ActivityMapper;
+import you.v50to.eatwhat.mapper.ActivityPostMapper;
+import you.v50to.eatwhat.service.activity.ActivityDefinitions;
+import you.v50to.eatwhat.service.activity.ActivityFieldSchema;
+import you.v50to.eatwhat.service.storage.FileLifecycleService;
 import you.v50to.eatwhat.service.storage.ObjectStorageService;
+import you.v50to.eatwhat.sync.activity.ActivityEventCapture;
+import you.v50to.eatwhat.sync.activity.ActivityEvents;
+import you.v50to.eatwhat.sync.relation.RelationCommands;
+import you.v50to.eatwhat.sync.relation.RelationKind;
 import you.v50to.eatwhat.utils.LocationValidationUtil;
+import you.v50to.eatwhat.utils.LoginUtil;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static you.v50to.eatwhat.utils.ValidUtil.validPage;
 import static you.v50to.eatwhat.utils.ValidUtil.validPageSize;
 
+/**
+ * 通用活动：读取活动、在活动下发内容、点赞。活动定义由 {@link ActivityAdminService} 维护。
+ * 内容同步走活动同步（activity_posts），点赞走关系同步（activity_post_like）。
+ */
 @Service
 public class ActivityService {
 
-    private static final String FOODS_BY_LIKES_CACHE_PREFIX = "activity:foods:byLikes:";
-    private static final String DINNERS_BY_LIKES_CACHE_PREFIX = "activity:dinners:byLikes:";
+    /** 点赞 target_type，与 activity_likes、notifications 中的取值一致。 */
+    public static final String POST_TARGET = "post";
+    private static final String BY_LIKES_CACHE_PREFIX = "activity:posts:byLikes:";
     private static final Duration BY_LIKES_CACHE_TTL = Duration.ofMinutes(2);
+    private static final TypeReference<Map<String, Object>> EXTRA = new TypeReference<>() { };
+
+    @Autowired(required = false)
+    private FileLifecycleService fileLifecycleService;
+    @Autowired(required = false)
+    private RelationCommands relations;
+    @Autowired(required = false)
+    private ManagedDomainWriteGuard managedDomainWriteGuard;
+    /** Present only while app.sync.activity.enabled=true; absent means the original local-only behavior. */
+    @Autowired(required = false)
+    private ActivityEventCapture capture;
 
     @Resource
-    private ActivityFoodMapper activityFoodMapper;
+    private ActivityMapper activityMapper;
     @Resource
-    private ActivityDinnerMapper activityDinnerMapper;
+    private ActivityPostMapper activityPostMapper;
     @Resource
     private ActivityLikeMapper activityLikeMapper;
     @Resource
@@ -56,236 +88,237 @@ public class ActivityService {
     @Resource
     private ObjectMapper objectMapper;
 
-    @Transactional
-    public Result<Void> publishFood(CreateActivityFoodDTO dto) {
-        // 发布地域美食前，先校验省市是否存在且归属正确
-        Result<Void> validationResult = locationValidationUtil.validateProvinceAndCity(dto.getProvinceId(), dto.getCityId());
-        if (validationResult != null) {
-            return validationResult;
-        }
-
-        ActivityFood food = new ActivityFood();
-        food.setAccountId(StpUtil.getLoginIdAsLong());
-        food.setFoodName(dto.getFoodName());
-        food.setDescription(dto.getDescription());
-        food.setProvinceId(dto.getProvinceId());
-        food.setCityId(dto.getCityId());
-        food.setPictureUrl(toArray(dto.getPictureUrl()));
-
-        activityFoodMapper.insert(food);
-        clearFoodByLikesCache();
-        return Result.ok();
+    /** 已上线的活动，按排序值、ID 排列。 */
+    public Result<List<ActivityVO>> listOnline() {
+        long now = System.currentTimeMillis();
+        List<ActivityVO> items = activityMapper.selectList(new LambdaQueryWrapper<Activity>()
+                        .apply("catalog_visible")
+                        .eq(Activity::getStatus, ActivityDefinitions.ONLINE)
+                        .orderByAsc(Activity::getSort)
+                        .orderByAsc(Activity::getId))
+                .stream().map(activity -> ActivityDefinitions.toVO(activity, objectMapper, now)).toList();
+        return Result.ok(items);
     }
 
-    public Result<PageResult<ActivityFoodDTO>> listFoods(Integer page, Integer pageSize) {
+    public Result<ActivityVO> getActivity(String code) {
+        Activity activity = readableActivity(code);
+        if (activity == null) return Result.fail(BizCode.ACTIVITY_NOT_FOUND);
+        return Result.ok(ActivityDefinitions.toVO(activity, objectMapper, System.currentTimeMillis()));
+    }
+
+    public Result<PageResult<ActivityPostVO>> listPosts(String code, String sort, Integer page, Integer pageSize) {
+        Activity activity = readableActivity(code);
+        if (activity == null) return Result.fail(BizCode.ACTIVITY_NOT_FOUND);
         page = validPage(page);
         pageSize = validPageSize(pageSize);
-
-        // 只查询未软删除记录，按创建时间倒序返回
-        int offset = (page - 1) * pageSize;
-        List<ActivityFood> foods = activityFoodMapper.selectActiveFoods(offset, pageSize);
-        Long totalItems = activityFoodMapper.countActiveFoods();
-
-        Set<Long> likedFoodIds = queryLikedTargetIds(StpUtil.getLoginIdAsLong(), "food", foods.stream().map(ActivityFood::getId).toList());
-        List<ActivityFoodDTO> items = foods.stream().map(food -> toFoodDTO(food, likedFoodIds.contains(food.getId()))).toList();
-        return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems));
-    }
-
-    public Result<ActivityFoodDTO> getFoodDetail(Long id) {
-        ActivityFood food = activityFoodMapper.selectActiveFoodById(id);
-        if (food == null) {
-            return Result.fail(BizCode.OP_FAILED, "菜品不存在");
+        boolean byLikes = "LIKES".equals(sort);
+        String cacheKey = byLikes ? byLikesCacheKey(activity.getId(), page, pageSize) : null;
+        PageResult<ActivityPostVO> result = cacheKey == null ? null : readByLikesCache(cacheKey);
+        if (result == null) {
+            int offset = (page - 1) * pageSize;
+            List<ActivityPostVO> items = activityPostMapper.selectActivePage(activity.getId(), byLikes, offset, pageSize)
+                    .stream().map(post -> toVO(post, activity.getCode())).toList();
+            result = PageResult.of(items, page.longValue(), pageSize.longValue(), activityPostMapper.countActive(activity.getId()));
+            // 缓存里不含个人点赞状态，读出后再按当前用户补上。
+            if (cacheKey != null) writeByLikesCache(cacheKey, result);
         }
-        Set<Long> likedFoodIds = queryLikedTargetIds(StpUtil.getLoginIdAsLong(), "food", List.of(id));
-        return Result.ok(toFoodDTO(food, likedFoodIds.contains(id)));
-    }
-
-    public Result<PageResult<ActivityFoodDTO>> listFoodsByLikes(Integer page, Integer pageSize) {
-        page = validPage(page);
-        pageSize = validPageSize(pageSize);
-
-        String cacheKey = byLikesCacheKey(FOODS_BY_LIKES_CACHE_PREFIX, page, pageSize);
-        PageResult<ActivityFoodDTO> cached = readByLikesCache(cacheKey, new TypeReference<PageResult<ActivityFoodDTO>>() {
-        });
-        if (cached != null) {
-            applyFoodLikedState(cached.getItems(), StpUtil.getLoginIdAsLong());
-            return Result.ok(cached);
-        }
-
-        int offset = (page - 1) * pageSize;
-        List<ActivityFood> foods = activityFoodMapper.selectActiveFoodsOrderByLikes(offset, pageSize);
-        Long totalItems = activityFoodMapper.countActiveFoods();
-        List<ActivityFoodDTO> items = foods.stream().map(this::toFoodDTO).toList();
-
-        PageResult<ActivityFoodDTO> result = PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems);
-        writeByLikesCache(cacheKey, result);
-        applyFoodLikedState(result.getItems(), StpUtil.getLoginIdAsLong());
+        personalize(result.getItems());
         return Result.ok(result);
     }
 
+    public Result<ActivityPostVO> getPost(Long id) {
+        ActivityPost post = activityPostMapper.selectActiveById(id);
+        Activity activity = post == null ? null : activityMapper.selectById(post.getActivityId());
+        if (activity == null || !ActivityDefinitions.publiclyReadable(activity) || !activityMapper.visible(activity.getId())) {
+            return Result.fail(BizCode.ACTIVITY_POST_NOT_FOUND);
+        }
+        ActivityPostVO vo = toVO(post, activity.getCode());
+        personalize(List.of(vo));
+        return Result.ok(vo);
+    }
+
     @Transactional
-    public Result<Void> deleteFood(Long id) {
-        ActivityFood food = activityFoodMapper.selectById(id);
-        if (food == null || food.getDeletedAt() != null) {
-            return Result.fail(BizCode.OP_FAILED, "菜品不存在");
+    public Result<CreatedResourceVO> publishPost(String code, CreateActivityPostDTO dto) {
+        Activity activity = readableActivity(code);
+        if (activity == null) return Result.fail(BizCode.ACTIVITY_NOT_FOUND);
+        if (!ActivityDefinitions.postingOpen(activity, System.currentTimeMillis())) return Result.fail(BizCode.ACTIVITY_NOT_OPEN);
+        if (dto.getPictureUrl().size() > activity.getMaxPictures()) {
+            return Result.fail(BizCode.PARAM_INVALID, "这个活动最多上传 " + activity.getMaxPictures() + " 张图片");
+        }
+        if (Boolean.TRUE.equals(activity.getRequireLocation()) && (dto.getProvinceId() == null || dto.getCityId() == null)) {
+            return Result.fail(BizCode.PARAM_MISSING, "这个活动需要选择省份和城市");
+        }
+        if (dto.getProvinceId() != null || dto.getCityId() != null) {
+            Result<Void> location = locationValidationUtil.validateProvinceAndCity(dto.getProvinceId(), dto.getCityId());
+            if (location != null) return new Result<>(location.getCode(), null, location.getMsg());
+        }
+        String extra;
+        try {
+            Map<String, Object> values = ActivityFieldSchema.validateExtra(
+                    ActivityDefinitions.schema(activity, objectMapper), dto.getExtra());
+            extra = objectMapper.writeValueAsString(values);
+        } catch (IllegalArgumentException invalid) {
+            return Result.fail(BizCode.PARAM_INVALID, invalid.getMessage());
+        }
+        if (extra.getBytes(StandardCharsets.UTF_8).length > ActivityFieldSchema.MAX_EXTRA_BYTES) {
+            return Result.fail(BizCode.PARAM_INVALID, "扩展字段内容过长");
         }
 
+        ActivityPost post = new ActivityPost();
+        post.setActivityId(activity.getId());
+        post.setAccountId(StpUtil.getLoginIdAsLong());
+        post.setTitle(blankToNull(dto.getTitle()));
+        post.setDescription(dto.getDescription());
+        post.setProvinceId(dto.getProvinceId());
+        post.setCityId(dto.getCityId());
+        post.setPictureUrl(dto.getPictureUrl().toArray(new String[0]));
+        post.setExtra(extra);
+        activityPostMapper.insert(post);
+        if (fileLifecycleService != null) fileLifecycleService.finalizeAndReferenceMany(post.getAccountId(), UploadBiz.ACTIVITY,
+                dto.getPictureUrl(), "activity_post", post.getId().toString(), "PUBLIC");
+        if (capture != null) {
+            capture.createdPost(post.getId(), post.getAccountId(), activity.getId(), post.getTitle(), post.getDescription(),
+                    post.getProvinceId(), post.getCityId(), List.of(post.getPictureUrl()), extra);
+        }
+        clearByLikesCache(activity.getId());
+        return Result.ok(new CreatedResourceVO(post.getId()));
+    }
+
+    @Transactional
+    public Result<Void> deletePost(Long id) {
+        ActivityPost post = activityPostMapper.selectById(id);
+        if (post == null || post.getDeletedAt() != null) return Result.fail(BizCode.ACTIVITY_POST_NOT_FOUND);
         // 仅允许发布者本人删除
-        Long currentUserId = StpUtil.getLoginIdAsLong();
-        if (food.getAccountId() == null || !food.getAccountId().equals(currentUserId)) {
-            return Result.fail(BizCode.NO_PERMISSION, "仅可删除自己发布的菜品");
+        if (!post.getAccountId().equals(StpUtil.getLoginIdAsLong())) {
+            return Result.fail(BizCode.NO_PERMISSION, "仅可删除自己发布的内容");
         }
-
-        // 软删除
-        food.setDeletedAt(System.currentTimeMillis());
-        activityFoodMapper.updateById(food);
-        clearFoodByLikesCache();
+        post.setDeletedAt(System.currentTimeMillis());
+        activityPostMapper.updateById(post);
+        // Soft delete: release the file references in the same transaction.
+        if (fileLifecycleService != null) fileLifecycleService.releaseReferences("activity_post", post.getId().toString(), null, "ENTITY_DELETED");
+        if (capture != null) capture.deleted(ActivityEvents.POSTS, post.getId(), post.getAccountId(), post.getDeletedAt());
+        clearByLikesCache(post.getActivityId());
         return Result.ok();
     }
 
     @Transactional
-    public Result<Void> publishDinner(CreateActivityDinnerDTO dto) {
-        ActivityDinner dinner = new ActivityDinner();
-        dinner.setAccountId(StpUtil.getLoginIdAsLong());
-        dinner.setDescription(dto.getDescription());
-        dinner.setPictureUrl(toArray(dto.getPictureUrl()));
-
-        activityDinnerMapper.insert(dinner);
-        clearDinnerByLikesCache();
-        return Result.ok();
-    }
-
-    public Result<PageResult<ActivityDinnerDTO>> listDinners(Integer page, Integer pageSize) {
-        page = validPage(page);
-        pageSize = validPageSize(pageSize);
-
-        // 只查询未软删除记录，按创建时间倒序返回
-        int offset = (page - 1) * pageSize;
-        List<ActivityDinner> dinners = activityDinnerMapper.selectActiveDinners(offset, pageSize);
-        Long totalItems = activityDinnerMapper.countActiveDinners();
-
-        List<ActivityDinnerDTO> items = dinners.stream().map(this::toDinnerDTO).toList();
-        return Result.ok(PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems));
-    }
-
-    public Result<ActivityDinnerDTO> getDinnerDetail(Long id) {
-        ActivityDinner dinner = activityDinnerMapper.selectActiveDinnerById(id);
-        if (dinner == null) {
-            return Result.fail(BizCode.OP_FAILED, "年夜饭不存在");
-        }
-        return Result.ok(toDinnerDTO(dinner));
-    }
-
-    public Result<PageResult<ActivityDinnerDTO>> listDinnersByLikes(Integer page, Integer pageSize) {
-        page = validPage(page);
-        pageSize = validPageSize(pageSize);
-
-        String cacheKey = byLikesCacheKey(DINNERS_BY_LIKES_CACHE_PREFIX, page, pageSize);
-        PageResult<ActivityDinnerDTO> cached = readByLikesCache(cacheKey, new TypeReference<PageResult<ActivityDinnerDTO>>() {
-        });
-        if (cached != null) {
-            return Result.ok(cached);
-        }
-
-        int offset = (page - 1) * pageSize;
-        List<ActivityDinner> dinners = activityDinnerMapper.selectActiveDinnersOrderByLikes(offset, pageSize);
-        Long totalItems = activityDinnerMapper.countActiveDinners();
-        List<ActivityDinnerDTO> items = dinners.stream().map(this::toDinnerDTO).toList();
-
-        PageResult<ActivityDinnerDTO> result = PageResult.of(items, page.longValue(), pageSize.longValue(), totalItems);
-        writeByLikesCache(cacheKey, result);
-        return Result.ok(result);
-    }
-
-    @Transactional
-    public Result<Void> deleteDinner(Long id) {
-        ActivityDinner dinner = activityDinnerMapper.selectById(id);
-        if (dinner == null || dinner.getDeletedAt() != null) {
-            return Result.fail(BizCode.OP_FAILED, "年夜饭不存在");
-        }
-
-        // 仅允许发布者本人删除
-        Long currentUserId = StpUtil.getLoginIdAsLong();
-        if (dinner.getAccountId() == null || !dinner.getAccountId().equals(currentUserId)) {
-            return Result.fail(BizCode.NO_PERMISSION, "仅可删除自己发布的年夜饭");
-        }
-
-        // 软删除：写 deleted_at
-        dinner.setDeletedAt(System.currentTimeMillis());
-        activityDinnerMapper.updateById(dinner);
-        clearDinnerByLikesCache();
-        return Result.ok();
-    }
-
-    @Transactional
-    public Result<Void> like(ActivityLikeReqDTO dto) {
-        // 点赞前校验目标是否存在且未删除
-        if (!targetExistsAndActive(dto.getTargetType(), dto.getActivityId())) {
-            return Result.fail(BizCode.OP_FAILED, "目标内容不存在");
-        }
-
+    public Result<Void> like(Long postId) {
+        ActivityPost post = activePost(postId);
+        if (post == null) return Result.fail(BizCode.ACTIVITY_POST_NOT_FOUND);
         Long userId = StpUtil.getLoginIdAsLong();
-        ActivityLike record = activityLikeMapper.selectOne(new LambdaQueryWrapper<ActivityLike>()
-                .eq(ActivityLike::getAccountId, userId)
-                .eq(ActivityLike::getTargetType, dto.getTargetType())
-                .eq(ActivityLike::getActivityId, dto.getActivityId()));
-
-        // 首次点赞：直接插入
+        if (relations != null) {
+            relations.change(RelationKind.activity_post_like, userId, postId, null, true);
+            clearByLikesCache(post.getActivityId());
+            return Result.ok();
+        }
+        if (managedDomainWriteGuard != null && managedDomainWriteGuard.relationManaged(
+                RelationKind.activity_post_like, userId, postId, null)) return Result.fail(BizCode.DATA_SYNC_PENDING);
+        ActivityLike record = findLike(userId, postId);
+        if (record != null && record.getDeletedAt() == null) return Result.ok();
         if (record == null) {
             ActivityLike like = new ActivityLike();
             like.setAccountId(userId);
-            like.setTargetType(dto.getTargetType());
-            like.setActivityId(dto.getActivityId());
+            like.setTargetType(POST_TARGET);
+            like.setActivityId(postId);
             activityLikeMapper.insert(like);
-            clearByTargetType(dto.getTargetType());
-            createLikeNotification(userId, dto.getTargetType(), dto.getActivityId());
-            return Result.ok();
+        } else {
+            // 之前取消过点赞，恢复点赞
+            activityLikeMapper.restore(record.getId());
         }
-
-        // 已经是点赞状态，保持幂等
-        if (record.getDeletedAt() == null) {
-            return Result.ok();
-        }
-
-        // 之前取消过点赞，恢复点赞
-        record.setDeletedAt(null);
-        activityLikeMapper.updateById(record);
-        clearByTargetType(dto.getTargetType());
-        createLikeNotification(userId, dto.getTargetType(), dto.getActivityId());
+        clearByLikesCache(post.getActivityId());
+        notificationService.notifyLike(userId, post.getAccountId(), POST_TARGET, postId);
         return Result.ok();
     }
 
     @Transactional
-    public Result<Void> unlike(ActivityLikeReqDTO dto) {
+    public Result<Void> unlike(Long postId) {
+        ActivityPost post = activePost(postId);
+        // 内容已删除时取消点赞视为成功，与原有点赞接口一致。
+        if (post == null) return Result.ok();
         Long userId = StpUtil.getLoginIdAsLong();
-        ActivityLike record = activityLikeMapper.selectOne(new LambdaQueryWrapper<ActivityLike>()
-                .eq(ActivityLike::getAccountId, userId)
-                .eq(ActivityLike::getTargetType, dto.getTargetType())
-                .eq(ActivityLike::getActivityId, dto.getActivityId()));
-
-        // 未点赞或已取消点赞，保持幂等
-        if (record == null || record.getDeletedAt() != null) {
+        if (relations != null) {
+            relations.change(RelationKind.activity_post_like, userId, postId, null, false);
+            clearByLikesCache(post.getActivityId());
             return Result.ok();
         }
-
-        // 软删除点赞记录
+        if (managedDomainWriteGuard != null && managedDomainWriteGuard.relationManaged(
+                RelationKind.activity_post_like, userId, postId, null)) return Result.fail(BizCode.DATA_SYNC_PENDING);
+        ActivityLike record = findLike(userId, postId);
+        if (record == null || record.getDeletedAt() != null) return Result.ok();
         record.setDeletedAt(System.currentTimeMillis());
         activityLikeMapper.updateById(record);
-        clearByTargetType(dto.getTargetType());
+        clearByLikesCache(post.getActivityId());
         return Result.ok();
     }
 
-    private String byLikesCacheKey(String prefix, Integer page, Integer pageSize) {
-        return prefix + "page:" + page + ":size:" + pageSize;
+    private Activity readableActivity(String code) {
+        Long id = code == null ? null : activityMapper.selectVisibleIdByCode(code);
+        Activity activity = id == null ? null : activityMapper.selectById(id);
+        return activity != null && ActivityDefinitions.publiclyReadable(activity) ? activity : null;
     }
 
-    private <T> PageResult<T> readByLikesCache(String key, TypeReference<PageResult<T>> typeReference) {
+    private ActivityPost activePost(Long postId) {
+        ActivityPost post = postId == null ? null : activityPostMapper.selectById(postId);
+        return post == null || post.getDeletedAt() != null ? null : post;
+    }
+
+    private ActivityLike findLike(Long userId, Long postId) {
+        return activityLikeMapper.selectOne(new LambdaQueryWrapper<ActivityLike>()
+                .eq(ActivityLike::getAccountId, userId)
+                .eq(ActivityLike::getTargetType, POST_TARGET)
+                .eq(ActivityLike::getActivityId, postId));
+    }
+
+    /** 游客不返回发布者 ID，避免枚举用户；登录用户补上自己的点赞状态。 */
+    private void personalize(List<ActivityPostVO> items) {
+        if (items == null || items.isEmpty()) return;
+        Long userId = LoginUtil.currentUserIdOrNull();
+        if (userId == null) {
+            items.forEach(item -> { item.setAccountId(null); item.setIsLiked(false); });
+            return;
+        }
+        Set<Long> liked = likedPostIds(userId, items.stream().map(ActivityPostVO::getId).toList());
+        items.forEach(item -> item.setIsLiked(liked.contains(item.getId())));
+    }
+
+    private Set<Long> likedPostIds(Long accountId, List<Long> postIds) {
+        List<ActivityLike> records = activityLikeMapper.selectList(new LambdaQueryWrapper<ActivityLike>()
+                .eq(ActivityLike::getAccountId, accountId)
+                .eq(ActivityLike::getTargetType, POST_TARGET)
+                .isNull(ActivityLike::getDeletedAt)
+                .in(ActivityLike::getActivityId, postIds));
+        if (records == null || records.isEmpty()) return Collections.emptySet();
+        return records.stream().map(ActivityLike::getActivityId).collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private ActivityPostVO toVO(ActivityPost post, String activityCode) {
+        ActivityPostVO vo = new ActivityPostVO();
+        vo.setId(post.getId());
+        vo.setActivityId(post.getActivityId());
+        vo.setActivityCode(activityCode);
+        vo.setAccountId(post.getAccountId());
+        vo.setUploaderName(post.getUploaderName());
+        vo.setTitle(post.getTitle());
+        vo.setDescription(post.getDescription());
+        vo.setProvinceId(post.getProvinceId());
+        vo.setCityId(post.getCityId());
+        vo.setPictureUrl(objectStorageService.signGetUrls(post.getPictureUrl() == null ? List.of() : Arrays.asList(post.getPictureUrl())));
+        vo.setExtra(post.getExtra() == null ? Map.of() : objectMapper.readValue(post.getExtra(), EXTRA));
+        vo.setLikesCount(post.getLikesCount());
+        vo.setCreatedAt(post.getCreatedAt());
+        vo.setUpdatedAt(post.getUpdatedAt());
+        return vo;
+    }
+
+    private String byLikesCacheKey(Long activityId, Integer page, Integer pageSize) {
+        return BY_LIKES_CACHE_PREFIX + activityId + ":page:" + page + ":size:" + pageSize;
+    }
+
+    private PageResult<ActivityPostVO> readByLikesCache(String key) {
         try {
             String json = redis.opsForValue().get(key);
-            if (json == null || json.isBlank()) {
-                return null;
-            }
-            return objectMapper.readValue(json, typeReference);
+            if (json == null || json.isBlank()) return null;
+            return objectMapper.readValue(json, new TypeReference<PageResult<ActivityPostVO>>() { });
         } catch (Exception ignored) {
             return null;
         }
@@ -293,164 +326,20 @@ public class ActivityService {
 
     private void writeByLikesCache(String key, Object value) {
         try {
-            String json = objectMapper.writeValueAsString(value);
-            redis.opsForValue().set(key, json, BY_LIKES_CACHE_TTL);
+            redis.opsForValue().set(key, objectMapper.writeValueAsString(value), BY_LIKES_CACHE_TTL);
         } catch (Exception ignored) {
         }
     }
 
-    private void clearByTargetType(String targetType) {
-        if ("food".equals(targetType)) {
-            clearFoodByLikesCache();
-            return;
-        }
-        clearDinnerByLikesCache();
-    }
-
-    private void clearFoodByLikesCache() {
-        clearByPrefix(FOODS_BY_LIKES_CACHE_PREFIX);
-    }
-
-    private void clearDinnerByLikesCache() {
-        clearByPrefix(DINNERS_BY_LIKES_CACHE_PREFIX);
-    }
-
-    private void clearByPrefix(String prefix) {
+    private void clearByLikesCache(Long activityId) {
         try {
-            Set<String> keys = redis.keys(prefix + "*");
-            if (keys == null || keys.isEmpty()) {
-                return;
-            }
-            redis.delete(keys);
+            Set<String> keys = redis.keys(BY_LIKES_CACHE_PREFIX + activityId + ":*");
+            if (keys != null && !keys.isEmpty()) redis.delete(keys);
         } catch (Exception ignored) {
         }
     }
 
-    private void createLikeNotification(Long actorId, String targetType, Long activityId) {
-        Long receiverId = getTargetOwnerId(targetType, activityId);
-        if (receiverId == null) {
-            return;
-        }
-        notificationService.notifyLike(actorId, receiverId, targetType, activityId);
-    }
-
-    private Long getTargetOwnerId(String targetType, Long activityId) {
-        if ("food".equals(targetType)) {
-            ActivityFood food = activityFoodMapper.selectById(activityId);
-            if (food == null || food.getDeletedAt() != null) {
-                return null;
-            }
-            return food.getAccountId();
-        }
-        ActivityDinner dinner = activityDinnerMapper.selectById(activityId);
-        if (dinner == null || dinner.getDeletedAt() != null) {
-            return null;
-        }
-        return dinner.getAccountId();
-    }
-
-    private boolean targetExistsAndActive(String targetType, Long activityId) {
-        if ("food".equals(targetType)) {
-            ActivityFood food = activityFoodMapper.selectById(activityId);
-            return food != null && food.getDeletedAt() == null;
-        }
-        ActivityDinner dinner = activityDinnerMapper.selectById(activityId);
-        return dinner != null && dinner.getDeletedAt() == null;
-    }
-
-    private Set<Long> queryLikedTargetIds(Long accountId, String targetType, List<Long> targetIds) {
-        if (accountId == null || targetIds == null || targetIds.isEmpty()) {
-            return Collections.emptySet();
-        }
-
-        List<ActivityLike> records = activityLikeMapper.selectList(new LambdaQueryWrapper<ActivityLike>()
-                .eq(ActivityLike::getAccountId, accountId)
-                .eq(ActivityLike::getTargetType, targetType)
-                .isNull(ActivityLike::getDeletedAt)
-                .in(ActivityLike::getActivityId, targetIds));
-
-        if (records == null || records.isEmpty()) {
-            return Collections.emptySet();
-        }
-        return records.stream().map(ActivityLike::getActivityId).collect(Collectors.toCollection(HashSet::new));
-    }
-
-    private void applyFoodLikedState(List<ActivityFoodDTO> foods, Long accountId) {
-        if (foods == null || foods.isEmpty()) {
-            return;
-        }
-        List<Long> foodIds = foods.stream().map(ActivityFoodDTO::getId).toList();
-        Set<Long> likedFoodIds = queryLikedTargetIds(accountId, "food", foodIds);
-        for (ActivityFoodDTO food : foods) {
-            food.setIsLiked(likedFoodIds.contains(food.getId()));
-        }
-    }
-
-    private ActivityFoodDTO toFoodDTO(ActivityFood food) {
-        return toFoodDTO(food, null);
-    }
-
-    private ActivityFoodDTO toFoodDTO(ActivityFood food, Boolean isLiked) {
-        ActivityFoodDTO dto = new ActivityFoodDTO();
-        dto.setId(food.getId());
-        dto.setAccountId(food.getAccountId());
-        dto.setUploaderName(food.getUploaderName());
-        dto.setFoodName(food.getFoodName());
-        dto.setDescription(food.getDescription());
-        dto.setProvinceId(food.getProvinceId());
-        dto.setCityId(food.getCityId());
-        dto.setPictureUrl(objectStorageService.signGetUrls(toList(food.getPictureUrl())));
-        dto.setLikesCount(food.getLikesCount());
-        if (isLiked == null) {
-            dto.setIsLiked(Boolean.TRUE.equals(food.getIsLiked()));
-        } else {
-            dto.setIsLiked(isLiked);
-        }
-        dto.setCreatedAt(food.getCreatedAt());
-        dto.setUpdatedAt(food.getUpdatedAt());
-        return dto;
-    }
-
-    private ActivityDinnerDTO toDinnerDTO(ActivityDinner dinner) {
-        ActivityDinnerDTO dto = new ActivityDinnerDTO();
-        dto.setId(dinner.getId());
-        dto.setAccountId(dinner.getAccountId());
-        dto.setPictureUrl(objectStorageService.signGetUrls(toList(dinner.getPictureUrl())));
-        dto.setDescription(dinner.getDescription());
-        dto.setLikesCount(dinner.getLikesCount());
-        dto.setCreatedAt(dinner.getCreatedAt());
-        dto.setUpdatedAt(dinner.getUpdatedAt());
-        return dto;
-    }
-
-    private String[] toArray(List<String> pictureUrl) {
-        if (pictureUrl == null) {
-            return new String[0];
-        }
-        return pictureUrl.toArray(new String[0]);
-    }
-
-    private List<String> toList(String[] pictureUrl) {
-        if (pictureUrl == null) {
-            return Collections.emptyList();
-        }
-        return Arrays.asList(pictureUrl);
-    }
-
-
-
-    public Result<PageResult<ActivityFoodDTO>> getFoodsByProvinceId(Integer provinceId,  Integer page, Integer pageSize) {
-        if (page == null || page < 1) {
-            page = 1;
-        }
-        if (pageSize == null || pageSize < 1) {
-            pageSize = 20;
-        }
-        int offset = (page - 1) * pageSize;
-        Long userId = StpUtil.getLoginIdAsLong();
-        List<ActivityFood> records = activityFoodMapper.selectFoodsByProvinceWithLiked(provinceId, userId, offset, pageSize);
-        Long total = activityFoodMapper.countActiveFoodsByProvince(provinceId);
-        List<ActivityFoodDTO> foods = records.stream().map(this::toFoodDTO).toList();
-        return Result.ok(PageResult.of(foods, page.longValue(), pageSize.longValue(), total));
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 }

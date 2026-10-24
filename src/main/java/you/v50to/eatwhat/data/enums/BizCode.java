@@ -41,6 +41,8 @@ public enum BizCode {
     SSO_STATE_INVALID(30012, "认证链接已失效，请回到 App 重新发起认证"),
     STUDENT_ID_TAKEN(30013, "这个学号已经认证过其他账号"),
     USERNAME_REGISTRATION_CLOSED(30014, "请使用手机号验证码注册"),
+    CAPTCHA_REQUIRED(30015, "请先完成人机验证"),
+    CAPTCHA_INVALID(30016, "人机验证失败或已过期，请重新验证"),
 
     // 4xxxx 业务逻辑错误
     OP_FAILED(40001, "操作失败"),
@@ -64,6 +66,7 @@ public enum BizCode {
     THIRD_PARTY_UNAVAILABLE(50001, "第三方服务不可用"),
     THIRD_PARTY_TIMEOUT(50002, "第三方接口超时"),
     THIRD_PARTY_BAD_RESPONSE(50003, "第三方返回异常"),
+    CAPTCHA_UNAVAILABLE(50004, "人机验证服务暂不可用，请稍后重试"),
 
     // 9xxxx 系统级错误
     SYSTEM_ERROR(90001, "系统内部异常"),

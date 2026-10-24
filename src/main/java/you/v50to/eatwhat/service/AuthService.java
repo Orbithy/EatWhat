@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionSynchronization;
 import you.v50to.eatwhat.account.AccountAuthService;
 import you.v50to.eatwhat.config.StpInterfaceImpl;
 import you.v50to.eatwhat.data.dto.ChangePwdDTO;
@@ -95,6 +96,9 @@ public class AuthService {
     /** 认证成功后浏览器跳到哪里。 */
     @Value("${app.oauth-success-redirect:/home}")
     private String oauthSuccessRedirect = "/home";
+    /** 仅由服务端配置，客户端不能提供任意重定向地址。 */
+    @Value("${app.oauth-app-success-redirect:https://v50to.you/app/auth/callback}")
+    private String oauthAppSuccessRedirect = "https://v50to.you/app/auth/callback";
     @Value("${app.site.id:legacy}")
     private String siteId = "legacy";
     /** 用户名加密码注册默认关闭，新用户只能用手机号验证码注册；旧账号的用户名登录不受影响。 */
@@ -412,11 +416,16 @@ public class AuthService {
      * 发起统一认证：生成一次性 state 绑定当前账号，返回统一认证地址。回跳地址形如 .../api/callback/{state}，
      * 浏览器跳回时不需要带登录态（App 的 token 在请求头里，整页跳转带不上）。
      */
-    public Result<SsoStartVO> startSso() {
+    public Result<SsoStartVO> startSso(String client) {
+        if (!"app".equals(client) && !"web".equals(client)) {
+            return Result.fail(BizCode.PARAM_INVALID, "client 只能是 app 或 web");
+        }
         long userId = StpUtil.getLoginIdAsLong();
         if (accountAuth != null) accountAuth.assertExternalAccess(userId);
         String state = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes(32));
-        redis.opsForValue().set(ssoStateKey(state), Long.toString(userId), SSO_STATE_TTL);
+        // Keep numeric web values compatible with outstanding links from earlier releases.
+        String owner = "app".equals(client) ? "app:" + userId : Long.toString(userId);
+        redis.opsForValue().set(ssoStateKey(state), owner, SSO_STATE_TTL);
         String callback = SsoUrls.callbackBase(oauthUrl, oauthCallbackUrl) + "/" + state;
         return Result.ok(new SsoStartVO(SsoUrls.loginUrl(oauthUrl, callback), SSO_STATE_TTL.toSeconds()));
     }
@@ -431,13 +440,16 @@ public class AuthService {
         if (owner == null) {
             return Result.fail(BizCode.SSO_STATE_INVALID);
         }
-        long userId = Long.parseLong(owner);
-        if(multiwriter!=null && multiwriter.enabled() && !multiwriter.inCommand()) return multiwriter.command(userId,userId,()->completeSso(userId,token,response));
-        return completeSso(userId, token, response);
+        boolean app = owner.startsWith("app:");
+        long userId = Long.parseLong(app ? owner.substring(4) : owner);
+        String successRedirect = app ? oauthAppSuccessRedirect : oauthSuccessRedirect;
+        if(multiwriter!=null && multiwriter.enabled() && !multiwriter.inCommand()) return multiwriter.command(userId,userId,()->completeSso(userId,token,response,successRedirect));
+        return completeSso(userId, token, response, successRedirect);
     }
 
     @SneakyThrows
-    private Result<HashMap<String, Object>> completeSso(long userId, String token, HttpServletResponse response) {
+    private Result<HashMap<String, Object>> completeSso(long userId, String token, HttpServletResponse response,
+                                                       String successRedirect) {
         String key = secret;
         if (accountAuth != null) accountAuth.assertExternalAccess(userId);
         Optional<JwtUtil.User> userOpt = JwtUtil.getClaim(token, key);
@@ -480,11 +492,25 @@ public class AuthService {
                 verificationMapper.updateById(v);
             }
 
-            String redisKey = "auth:" + userId;
-            redis.opsForValue().set(redisKey, "sso", StpInterfaceImpl.TTL);
-            response.sendRedirect(oauthSuccessRedirect);
+            // The App can query immediately when opened; publish success only after the DB commit.
+            if (TransactionSynchronizationManager.isActualTransactionActive()
+                    && TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override public void afterCommit() {
+                        finishSsoResponse(userId, response, successRedirect);
+                    }
+                });
+            } else {
+                finishSsoResponse(userId, response, successRedirect);
+            }
             return Result.ok();
         }
+    }
+
+    @SneakyThrows
+    private void finishSsoResponse(long userId, HttpServletResponse response, String successRedirect) {
+        redis.opsForValue().set("auth:" + userId, "sso", StpInterfaceImpl.TTL);
+        response.sendRedirect(successRedirect);
     }
 
     private String ssoStateKey(String state) {

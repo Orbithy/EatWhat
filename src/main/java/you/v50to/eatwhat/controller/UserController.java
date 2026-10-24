@@ -14,6 +14,7 @@ import you.v50to.eatwhat.data.vo.PageResult;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.data.vo.UserListItemVO;
 import you.v50to.eatwhat.service.UserService;
+import you.v50to.eatwhat.service.TencentCaptchaService;
 import you.v50to.eatwhat.utils.IpUtil;
 
 @Validated
@@ -23,6 +24,8 @@ public class UserController {
 
     @Resource
     private UserService userService;
+    @Resource
+    private TencentCaptchaService captchaService;
     @Resource
     private HttpServletRequest request;
 
@@ -43,7 +46,10 @@ public class UserController {
      */
     @SaCheckLogin
     @PostMapping("/getCode")
-    public Result<Void> getCode(@Valid @RequestBody SendCodeReq sendCodeReq) {
+    public Result<Void> getCode(@Valid @RequestBody SendCodeReq sendCodeReq,
+            @RequestHeader(value = TencentCaptchaService.TICKET_HEADER, required = false) String captchaTicket,
+            @RequestHeader(value = TencentCaptchaService.RANDSTR_HEADER, required = false) String captchaRandstr) {
+        captchaService.verify(captchaTicket, captchaRandstr, IpUtil.getClientIp(request));
         String ip = IpUtil.getClientIp(request);
         return userService.getCode(sendCodeReq, ip);
     }

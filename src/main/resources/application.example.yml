@@ -69,6 +69,7 @@ app:
   oauth-url: https://i.sdu.edu.cn/cas/proxy/login/page?forward=https%3A%2F%2Fv50to.you%2Fapi%2Fcallback  # 统一认证地址；forward 会被替换成带一次性 state 的回跳地址
   oauth-callback-url: https://v50to.you/api/callback  # 回跳地址前缀；后端自动追加一次性 /{state}
   # oauth-success-redirect: /home                         # 可选，认证成功后浏览器跳到哪里
+  oauth-app-success-redirect: https://v50to.you/app/auth/callback  # client=app 的成功回跳；App 收到链接后查询认证结果
   # auth:
   #   username-registration-enabled: false               # 默认关闭用户名加密码注册，新用户只能用手机号验证码注册
   jwt:

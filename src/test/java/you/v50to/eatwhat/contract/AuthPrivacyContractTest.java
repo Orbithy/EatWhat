@@ -52,6 +52,7 @@ class AuthPrivacyContractTest extends MvcContractSupport {
         ReflectionTestUtils.setField(service, "smsService", sms);
         assertNull(ReflectionTestUtils.getField(service, "accountAuth"));
         AuthController controller = new AuthController();
+        ReflectionTestUtils.setField(controller, "captchaService", mock(you.v50to.eatwhat.service.TencentCaptchaService.class));
         ReflectionTestUtils.setField(controller, "authService", service);
         validator = new LocalValidatorFactoryBean(); validator.afterPropertiesSet();
         originalHttp = mvc(controller);

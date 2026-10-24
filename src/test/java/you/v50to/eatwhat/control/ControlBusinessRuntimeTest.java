@@ -32,6 +32,11 @@ class ControlBusinessRuntimeTest {
                 "app.storage.s3.public-base-url","https://cdn.example.invalid/uploads","app.storage.s3.bucket","eatwhat");
         var p=ControlBusinessRuntime.properties(header(),database(),"https://example.invalid/api",source::get);source.forEach((key,value)->assertEquals(value,p.get(key)));
     }
+    @Test void installationPreservesTheConfiguredAppSuccessLink(){
+        var source=Map.of("app.oauth-app-success-redirect","https://v50to.you/app/auth/callback");
+        var p=ControlBusinessRuntime.properties(header(),database(),"https://example.invalid/api",source::get);
+        assertEquals(source.get("app.oauth-app-success-redirect"),p.get("app.oauth-app-success-redirect"));
+    }
     @Test void renderingIsDeterministicAndBothRealParsersRecoverSecretsExactly()throws Exception{
         var values=Map.of("app.jwt.key","  #餐碗🍜\\secret\nnext=value:yes\t","spring.datasource.url","jdbc:postgresql://postgres:5432/eatwhat","spring.mail.password","!秘密\\line\r\n");
         String text=ControlBusinessRuntime.render(values);assertEquals(text,ControlBusinessRuntime.render(new HashMap<>(values)));assertTrue(text.chars().allMatch(c->c<128));assertFalse(text.startsWith("#"));

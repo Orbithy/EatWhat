@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -62,6 +63,11 @@ public class GlobalExceptionHandler {
                 null,
                 e.getMessage()
         );
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public Result<Void> handleMissingRequestParameter(MissingServletRequestParameterException ex) {
+        return new Result<>(BizCode.PARAM_MISSING.getCode(), null, "缺少必填参数：" + ex.getParameterName());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

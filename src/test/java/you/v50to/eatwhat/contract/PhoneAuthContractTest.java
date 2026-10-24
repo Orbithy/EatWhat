@@ -88,6 +88,7 @@ class PhoneAuthContractTest extends MvcContractSupport {
         ReflectionTestUtils.setField(service, "transactionManager", transactionManager);
 
         AuthController controller = new AuthController();
+        ReflectionTestUtils.setField(controller, "captchaService", mock(you.v50to.eatwhat.service.TencentCaptchaService.class));
         ReflectionTestUtils.setField(controller, "authService", service);
         http = mvc(controller);
     }

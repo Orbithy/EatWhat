@@ -9,7 +9,7 @@ import java.util.function.Function;
  * this map. An EXTERNAL business remains gated until normal enrollment. */
 public final class ControlBusinessRuntime {
     private ControlBusinessRuntime(){}
-    private static final List<String> COPIED=List.of("app.auth.username-registration-enabled","app.oauth-url","app.oauth-callback-url","app.oauth-success-redirect","app.jwt.key","app.mail.from","app.mail.from-name",
+    private static final List<String> COPIED=List.of("app.auth.username-registration-enabled","app.oauth-url","app.oauth-callback-url","app.oauth-success-redirect","app.oauth-app-success-redirect","app.jwt.key","app.mail.from","app.mail.from-name",
             "spring.mail.host","spring.mail.port","spring.mail.username","spring.mail.password","spring.mail.properties.mail.smtp.auth",
             "spring.mail.properties.mail.smtp.ssl.enable","spring.mail.properties.mail.smtp.starttls.enable","sms.active","sms.aliyun.access-key-id",
             "sms.aliyun.access-key-secret","sms.aliyun.sign-name","sms.aliyun.interval","app.storage.s3.provider","app.storage.s3.endpoint",

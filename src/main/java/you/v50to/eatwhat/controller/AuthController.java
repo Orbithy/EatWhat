@@ -19,6 +19,7 @@ import you.v50to.eatwhat.data.enums.Scene;
 import you.v50to.eatwhat.data.vo.Result;
 import you.v50to.eatwhat.data.vo.SsoStartVO;
 import you.v50to.eatwhat.service.AuthService;
+import you.v50to.eatwhat.service.TencentCaptchaService;
 import you.v50to.eatwhat.utils.IpUtil;
 
 import java.util.HashMap;
@@ -31,7 +32,17 @@ public class AuthController {
     @Resource
     private AuthService authService;
     @Resource
+    private TencentCaptchaService captchaService;
+    @Resource
     private HttpServletRequest request;
+
+    /** Fresh, single-use widget initialization parameters; secret keys are never returned. */
+    @GetMapping("/captcha/config")
+    public Result<TencentCaptchaService.PublicConfig> captchaConfig(HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Pragma", "no-cache");
+        return Result.ok(captchaService.publicConfig());
+    }
 
     /**
      * @param username 预选用户名
@@ -82,7 +93,10 @@ public class AuthController {
      * 同一手机号 60 秒一次，5 分钟内有效，连续输错 5 次要重新获取。
      */
     @PostMapping("/phone/code")
-    public Result<Void> sendLoginCode(@Valid @RequestBody PhoneCodeReq req) {
+    public Result<Void> sendLoginCode(@Valid @RequestBody PhoneCodeReq req,
+            @RequestHeader(value = TencentCaptchaService.TICKET_HEADER, required = false) String captchaTicket,
+            @RequestHeader(value = TencentCaptchaService.RANDSTR_HEADER, required = false) String captchaRandstr) {
+        captchaService.verify(captchaTicket, captchaRandstr, IpUtil.getClientIp(request));
         return authService.sendLoginCode(req.getMobile(), IpUtil.getClientIp(request));
     }
 
@@ -105,11 +119,13 @@ public class AuthController {
     /**
      * 发起统一认证：返回带一次性 state 的统一认证地址（5 分钟内有效，只能用一次），客户端在浏览器里打开。
      * 认证完成后统一认证跳回 /api/callback/{state}，不需要登录态。
+     * client=app 时成功后跳到 https://v50to.you/app/auth/callback，App 收到链接后查询 /user/info 确认结果；
+     * 省略 client 或 client=web 时保留网页成功跳转。只接受 app/web，不接受客户端指定回跳地址。
      */
     @SaCheckLogin
     @RequestMapping("/sdu")
-    public Result<SsoStartVO> sdu() {
-        return authService.startSso();
+    public Result<SsoStartVO> sdu(@RequestParam(name = "client", defaultValue = "web") String client) {
+        return authService.startSso(client);
     }
 
     /**
@@ -131,7 +147,10 @@ public class AuthController {
      */
     @SaCheckLogin
     @GetMapping("/sendEmail")
-    public Result<Void> sendEmail(@RequestParam String email, HttpServletRequest request) {
+    public Result<Void> sendEmail(@RequestParam String email, HttpServletRequest request,
+            @RequestHeader(value = TencentCaptchaService.TICKET_HEADER, required = false) String captchaTicket,
+            @RequestHeader(value = TencentCaptchaService.RANDSTR_HEADER, required = false) String captchaRandstr) {
+        captchaService.verify(captchaTicket, captchaRandstr, IpUtil.getClientIp(request));
         String clientIp = IpUtil.getClientIp(request);
         return authService.sendEmail(email, clientIp);
     }
@@ -155,7 +174,10 @@ public class AuthController {
      */
     @SaCheckLogin
     @PostMapping("/getCode")
-    public Result<Void> sendCode(String mobile) {
+    public Result<Void> sendCode(String mobile,
+            @RequestHeader(value = TencentCaptchaService.TICKET_HEADER, required = false) String captchaTicket,
+            @RequestHeader(value = TencentCaptchaService.RANDSTR_HEADER, required = false) String captchaRandstr) {
+        captchaService.verify(captchaTicket, captchaRandstr, IpUtil.getClientIp(request));
         String ip = IpUtil.getClientIp(request);
         return authService.sendCode(Scene.auth, mobile, ip);
     }
@@ -177,7 +199,10 @@ public class AuthController {
      */
     @SaCheckLogin
     @PostMapping("/password/code")
-    public Result<Void> sendPasswordCode() {
+    public Result<Void> sendPasswordCode(
+            @RequestHeader(value = TencentCaptchaService.TICKET_HEADER, required = false) String captchaTicket,
+            @RequestHeader(value = TencentCaptchaService.RANDSTR_HEADER, required = false) String captchaRandstr) {
+        captchaService.verify(captchaTicket, captchaRandstr, IpUtil.getClientIp(request));
         return authService.sendPasswordCode(IpUtil.getClientIp(request));
     }
 

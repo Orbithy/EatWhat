@@ -11,9 +11,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import you.v50to.eatwhat.config.SecurityConfig;
 import you.v50to.eatwhat.config.StpInterfaceImpl;
@@ -35,9 +38,12 @@ import you.v50to.eatwhat.utils.JwtUtil;
 import tools.jackson.databind.json.JsonMapper;
 
 import javax.crypto.SecretKey;
+import javax.sql.DataSource;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,9 +53,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -70,6 +78,7 @@ class SduCallbackContractTest extends MvcContractSupport {
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private MockMvc http;
+    private AuthService service;
     private VerificationMapper verificationMapper;
     private final Map<String, String> redisValues = new HashMap<>();
     private final AtomicReference<Verification> stored = new AtomicReference<>();
@@ -100,7 +109,7 @@ class SduCallbackContractTest extends MvcContractSupport {
         when(values.getAndDelete(anyString())).thenAnswer(i -> redisValues.remove(i.<String>getArgument(0)));
         when(verificationMapper.exists(any())).thenAnswer(ignored -> studentIdTaken);
 
-        AuthService service = new AuthService();
+        service = new AuthService();
         ReflectionTestUtils.setField(service, "userMapper", userMapper);
         ReflectionTestUtils.setField(service, "contactMapper", mock(ContactMapper.class));
         ReflectionTestUtils.setField(service, "privacyMapper", mock(PrivacyMapper.class));
@@ -136,7 +145,13 @@ class SduCallbackContractTest extends MvcContractSupport {
 
     /** Calls /auth/sdu with the App's header token and returns the state embedded in the forward URL. */
     private String startVerification(String token) throws Exception {
-        String body = http.perform(get("/auth/sdu").header(TOKEN_HEADER, "Bearer " + token))
+        return startVerification(token, null);
+    }
+
+    private String startVerification(String token, String client) throws Exception {
+        var request = get("/auth/sdu").header(TOKEN_HEADER, "Bearer " + token);
+        if (client != null) request.param("client", client);
+        String body = http.perform(request)
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.expiresIn").value(300))
                 .andReturn().getResponse().getContentAsString();
@@ -145,6 +160,121 @@ class SduCallbackContractTest extends MvcContractSupport {
                 + URLEncoder.encode("https://app.example.invalid/api/callback/", StandardCharsets.UTF_8);
         assertTrue(url.startsWith(prefix), url);
         return url.substring(prefix.length());
+    }
+
+    @Test
+    void appCallbackOpensTheRegisteredHttpsLinkAndKeepsTheExistingSession() throws Exception {
+        String token = loginAs(USER_ID);
+        String state = startVerification(token, "app");
+        assertEquals("app:" + USER_ID, redisValues.get("sso:state:v1:legacy:" + state));
+        http.perform(get("/callback/" + state).param("token", casToken("202300001", "张三")))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("https://v50to.you/app/auth/callback"))
+                .andExpect(header().doesNotExist("Set-Cookie"));
+        assertEquals(USER_ID, stored.get().getAccountId());
+        assertEquals(List.of(token), StpUtil.getTokenValueListByLoginId(USER_ID));
+        http.perform(get("/auth/verify").header(TOKEN_HEADER, "Bearer " + token))
+                .andExpect(jsonPath("$.data[0]").value("verify:sso"));
+        http.perform(get("/callback/" + state).param("token", casToken("202300001", "张三")))
+                .andExpect(jsonPath("$.code").value(BizCode.SSO_STATE_INVALID.getCode()))
+                .andExpect(header().doesNotExist("Location"));
+    }
+
+    @Test
+    void callbackCannotChangeTheClientOrSupplyAnArbitraryRedirect() throws Exception {
+        String token = loginAs(USER_ID);
+        String webState = startVerification(token, "web");
+        http.perform(get("/callback/" + webState).param("token", casToken("202300001", "张三"))
+                        .param("client", "app").param("redirect", "https://untrusted.invalid"))
+                .andExpect(redirectedUrl("/home"));
+        String appState = startVerification(token, "app");
+        http.perform(get("/auth/callback/" + appState).param("token", casToken("202300001", "张三"))
+                        .param("client", "web").param("redirect", "https://untrusted.invalid"))
+                .andExpect(redirectedUrl("https://v50to.you/app/auth/callback"));
+    }
+
+    @Test
+    void unsupportedClientDoesNotIssueAState() throws Exception {
+        http.perform(get("/auth/sdu").param("client", "https://untrusted.invalid")
+                        .header(TOKEN_HEADER, "Bearer " + loginAs(USER_ID)))
+                .andExpect(jsonPath("$.code").value(BizCode.PARAM_INVALID.getCode()));
+        assertTrue(redisValues.keySet().stream().noneMatch(key -> key.startsWith("sso:state:")));
+    }
+
+    @Test
+    void failedAppVerificationDoesNotOpenTheAppAndRequiresANewLink() throws Exception {
+        String token = loginAs(USER_ID);
+        String state = startVerification(token, "app");
+        http.perform(get("/callback/" + state).param("token", "not-a-jwt"))
+                .andExpect(jsonPath("$.code").value(BizCode.THIRD_PARTY_BAD_RESPONSE.getCode()))
+                .andExpect(header().doesNotExist("Location"));
+        http.perform(get("/callback/" + state).param("token", casToken("202300001", "张三")))
+                .andExpect(jsonPath("$.code").value(BizCode.SSO_STATE_INVALID.getCode()));
+        studentIdTaken = true;
+        String anotherState = startVerification(token, "app");
+        http.perform(get("/callback/" + anotherState).param("token", casToken("202300001", "张三")))
+                .andExpect(jsonPath("$.code").value(BizCode.STUDENT_ID_TAKEN.getCode()))
+                .andExpect(header().doesNotExist("Location"));
+        verify(verificationMapper, never()).insert(any(Verification.class));
+    }
+
+    private TransactionTemplate transaction(Connection connection) throws SQLException {
+        var source = mock(DataSource.class);
+        when(source.getConnection()).thenReturn(connection);
+        when(connection.getAutoCommit()).thenReturn(true);
+        return new TransactionTemplate(new DataSourceTransactionManager(source));
+    }
+
+    private MockHttpServletResponse callbackResponse(String state) {
+        // Match production: the service transaction commits before MVC writes the response body.
+        var response = new MockHttpServletResponse();
+        assertEquals(0, service.callBack(state, casToken("202300001", "张三"), response).getCode());
+        return response;
+    }
+
+    @Test
+    void appRedirectAndPermissionsArePublishedOnlyAfterCommit() throws Exception {
+        String state = startVerification(loginAs(USER_ID), "app");
+        var connection = mock(Connection.class);
+        var response = transaction(connection).execute(status -> {
+            var pending = callbackResponse(state);
+            assertNull(pending.getRedirectedUrl());
+            assertNull(redisValues.get("auth:" + USER_ID));
+            return pending;
+        });
+        verify(connection).commit();
+        assertEquals("https://v50to.you/app/auth/callback", response.getRedirectedUrl());
+        assertEquals("sso", redisValues.get("auth:" + USER_ID));
+    }
+
+    @Test
+    void rolledBackVerificationNeverRedirectsOrPublishesPermissions() throws Exception {
+        String state = startVerification(loginAs(USER_ID), "app");
+        var connection = mock(Connection.class);
+        var response = transaction(connection).execute(status -> {
+            var pending = callbackResponse(state);
+            status.setRollbackOnly();
+            return pending;
+        });
+        verify(connection).rollback();
+        assertNull(response.getRedirectedUrl());
+        assertNull(redisValues.get("auth:" + USER_ID));
+    }
+
+    @Test
+    void failedDatabaseCommitNeverOpensTheApp() throws Exception {
+        String state = startVerification(loginAs(USER_ID), "app");
+        var connection = mock(Connection.class);
+        doThrow(new SQLException("synthetic commit failure")).when(connection).commit();
+        var pending = new AtomicReference<MockHttpServletResponse>();
+        var template = transaction(connection);
+        assertThrows(org.springframework.transaction.TransactionSystemException.class, () ->
+                template.execute(status -> {
+                    pending.set(callbackResponse(state));
+                    return null;
+                }));
+        assertNull(pending.get().getRedirectedUrl());
+        assertNull(redisValues.get("auth:" + USER_ID));
     }
 
     @Test

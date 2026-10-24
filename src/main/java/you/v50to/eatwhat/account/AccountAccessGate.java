@@ -16,7 +16,7 @@ import java.util.Set;
 
 /** Conditionally registered with the opt-in account module; no path or proxy header can select a site. */
 public final class AccountAccessGate implements WebMvcConfigurer, HandlerInterceptor {
-    private static final Set<String> PUBLIC_AUTH = Set.of("register", "login", "checkUsername", "logout", "sendLoginCode", "phoneLogin", "callback", "callbackWithState");
+    private static final Set<String> PUBLIC_AUTH = Set.of("register", "login", "checkUsername", "logout", "sendLoginCode", "phoneLogin", "callback", "callbackWithState", "captchaConfig");
     private final AccountAuthService accounts;
 
     public AccountAccessGate(AccountAuthService accounts) { this.accounts = accounts; }

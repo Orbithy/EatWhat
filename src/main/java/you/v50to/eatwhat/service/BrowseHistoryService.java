@@ -37,6 +37,28 @@ public class BrowseHistoryService {
     @Autowired(required = false)
     private BrowseCommands browseCommands;
 
+    @Autowired(required = false)
+    private you.v50to.eatwhat.config.SiteProperties siteProperties;
+
+    @org.springframework.transaction.annotation.Transactional
+    public Result<Void> clearBrowseHistory(Long accountId, String targetType) {
+        if (targetType != null && !List.of("food", "restaurant").contains(targetType)) {
+            return Result.fail(you.v50to.eatwhat.data.enums.BizCode.PARAM_INVALID);
+        }
+        if (browseCommands != null) {
+            return browseCommands.clear(accountId, targetType) ? Result.ok()
+                    : Result.fail(you.v50to.eatwhat.data.enums.BizCode.DATA_SYNC_PENDING);
+        }
+        // Managed sites must retain a causal deletion frontier even while the sync module is disabled.
+        if (siteProperties != null && siteProperties.getMode() != you.v50to.eatwhat.config.SiteProperties.Mode.LEGACY) {
+            return Result.fail(you.v50to.eatwhat.data.enums.BizCode.DATA_SYNC_PENDING);
+        }
+        browseHistoryMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<you.v50to.eatwhat.data.po.BrowseHistory>()
+                .eq(you.v50to.eatwhat.data.po.BrowseHistory::getAccountId, accountId)
+                .eq(targetType != null, you.v50to.eatwhat.data.po.BrowseHistory::getTargetType, targetType));
+        return Result.ok();
+    }
+
     public void recordBrowse(Long accountId, String targetType, Long targetId) {
         if (browseCommands != null) browseCommands.record(accountId, targetType, targetId);
         else browseHistoryMapper.insertIfNotRecent(accountId, targetType, targetId);

@@ -20,6 +20,13 @@ import java.util.Objects;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(you.v50to.eatwhat.exception.DuplicateFoodException.class)
+    public Result<you.v50to.eatwhat.data.vo.CreatedResourceVO> duplicateFood(
+            you.v50to.eatwhat.exception.DuplicateFoodException failure) {
+        return Result.fail(BizCode.FOOD_NAME_EXISTS,
+                new you.v50to.eatwhat.data.vo.CreatedResourceVO(failure.foodId()));
+    }
+
     @ExceptionHandler(cn.dev33.satoken.exception.NotLoginException.class)
     public Result<Void> notLoginExceptionHandler() {
         return Result.fail(BizCode.NOT_LOGIN);

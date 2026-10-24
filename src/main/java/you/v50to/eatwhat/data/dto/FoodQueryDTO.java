@@ -11,6 +11,7 @@ import java.util.List;
 public class FoodQueryDTO {
     public enum Sort { NEWEST, PRICE_ASC, PRICE_DESC, POPULAR, FAVORITED_AT }
     @Min(1) private Long restaurantId;
+    @Min(1) private Long uploaderId;
     @Min(1) private Long hubId;
     @Size(max = 64) private String keyword;
     private FoodCategory category;

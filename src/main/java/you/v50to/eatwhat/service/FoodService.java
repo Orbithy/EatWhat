@@ -111,7 +111,7 @@ public class FoodService {
         Food food = new Food();
         food.setAccountId(currentUserId());
         food.setRestaurantId(dto.getRestaurantId());
-        food.setName(dto.getName());
+        food.setName(dto.getName().strip());
         food.setDescription(dto.getDescription());
         food.setPrice(dto.getPrice());
         food.setCategory(dto.getCategory());
@@ -122,12 +122,12 @@ public class FoodService {
                 dto.getCoverCrop(), dto.getRemoveBackground());
 
         if (catalogCommands == null) {
-            foodMapper.insert(food);
+            insertFoodRow(food);
         } else {
             WriteOutcome<Integer> outcome = catalogCommands.create(
                     CatalogKind.FOOD, food.getAccountId(), food.getRestaurantId(),
                     Map.of("restaurantId", food.getRestaurantId(), "name", food.getName()),
-                    () -> foodMapper.insert(food), food::getId, rows -> rows != null && rows > 0);
+                    () -> insertFoodRow(food), food::getId, rows -> rows != null && rows > 0);
             if (outcome.status() != Status.APPLIED) {
                 return Result.fail(BizCode.DATA_SYNC_PENDING);
             }
@@ -169,7 +169,7 @@ public class FoodService {
         long offset = ((long) page - 1) * size;
         query.setSystemTagIds(distinctIds(query.getSystemTagIds()));
         query.setMyCustomTagIds(distinctIds(query.getMyCustomTagIds()));
-        Long userId = favoritesOnly ? currentUserId() : currentUserIdOrNull();
+        Long userId = favoritesOnly || query.getUploaderId() != null ? currentUserId() : currentUserIdOrNull();
         List<String> names = foodTagService.normalizeTagNames(query.getMyCustomTagNames());
         List<Food> foods = foodMapper.selectFoods(query, userId, favoritesOnly, names, offset, size);
         Long total = foodMapper.countFoods(query, userId, favoritesOnly, names);
@@ -434,7 +434,22 @@ public class FoodService {
                 .eq(Food::getAccountId, currentUserId()));
     }
 
+    private void requireUniqueName(Food food) {
+        if (you.v50to.eatwhat.utils.FoodNames.key(food.getName()).isEmpty()) {
+            throw new BizException(BizCode.PARAM_INVALID, "菜名不能为空");
+        }
+        foodMapper.lockName(food.getRestaurantId(), food.getName());
+        Long duplicate = foodMapper.findDuplicateName(food.getRestaurantId(), food.getName(), food.getId());
+        if (duplicate != null && duplicate > 0) throw new you.v50to.eatwhat.exception.DuplicateFoodException(duplicate);
+    }
+
+    private int insertFoodRow(Food food) {
+        requireUniqueName(food);
+        return foodMapper.insert(food);
+    }
+
     private int updateFoodRow(Food food, boolean ownerOnly) {
+        requireUniqueName(food);
         if (!ownerOnly) return foodMapper.updateById(food);
         return foodMapper.update(food, new LambdaQueryWrapper<Food>().eq(Food::getId, food.getId())
                 .eq(Food::getAccountId, currentUserId()));
@@ -453,7 +468,7 @@ public class FoodService {
         if (dto.getRestaurantId() != null) {
             food.setRestaurantId(dto.getRestaurantId());
         }
-        if (dto.getName() != null) food.setName(dto.getName());
+        if (dto.getName() != null) food.setName(dto.getName().strip());
         if (dto.getDescription() != null) food.setDescription(dto.getDescription());
         if (dto.getPrice() != null) food.setPrice(dto.getPrice());
         if (dto.getCategory() != null) food.setCategory(dto.getCategory());

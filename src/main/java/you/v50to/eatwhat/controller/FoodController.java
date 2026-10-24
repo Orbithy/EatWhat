@@ -175,6 +175,16 @@ public class FoodController {
         return foodService.queryFoods(query, true);
     }
 
+    /** 他人主页的公开上传列表；个人点赞、收藏和私有标签始终按访问者计算。 */
+    @SaCheckLogin
+    @GetMapping("/by-user/{userId}")
+    public Result<PageResult<FoodVO>> getUserFoods(@PathVariable Long userId,
+                                                 @Valid FoodQueryDTO query) {
+        if (userId < 1) return Result.fail(you.v50to.eatwhat.data.enums.BizCode.PARAM_INVALID);
+        query.setUploaderId(userId);
+        return foodService.queryFoods(query, false);
+    }
+
     /** 作者修改自己的菜品；开启多写后可在本站独立编辑；旧模式须在校内权威站进行。 */
     @SaCheckRole("verified")
     @PutMapping("/my/{id}")

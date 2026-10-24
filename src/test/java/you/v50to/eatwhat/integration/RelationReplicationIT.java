@@ -53,6 +53,9 @@ class RelationReplicationIT {
         return pair(PG);
     }
     static Pair pair(GenericContainer<?> postgres) throws Exception {
+        return pair(postgres, true);
+    }
+    static Pair pair(GenericContainer<?> postgres, boolean genericActivities) throws Exception {
         var ap=new SiteProperties();ap.setMode(SiteProperties.Mode.CAMPUS);ap.setId("relation-campus");ap.setInstanceId(UUID.randomUUID());
         var bp=new SiteProperties();bp.setMode(SiteProperties.Mode.EXTERNAL);bp.setId("relation-external");bp.setInstanceId(UUID.randomUUID());
         var ad=EventFoundationTestSupport.createDatabase(postgres,ap);var bd=EventFoundationTestSupport.createDatabase(postgres,bp);
@@ -63,11 +66,14 @@ class RelationReplicationIT {
         long tag=ad.runtime().queryForObject("INSERT INTO food_tags(name,normalized_name,tag_type) VALUES('fixture tag','fixture tag','system') RETURNING id",Long.class);
         long activity=ad.runtime().queryForObject("INSERT INTO activity_foods(account_id,food_name,picture_url) VALUES(?,'fixture',ARRAY['activity/test.png']) RETURNING id",Long.class,owner);
         long dinner=ad.runtime().queryForObject("INSERT INTO activity_dinners(account_id,picture_url) VALUES(?,ARRAY['activity/test.png']) RETURNING id",Long.class,owner);
-        long definition=ad.runtime().queryForObject("INSERT INTO activities(code,name,status) VALUES('fixture','fixture','ONLINE') RETURNING id",Long.class);
-        long post=ad.runtime().queryForObject("INSERT INTO activity_posts(activity_id,account_id,picture_url) VALUES(?,?,ARRAY['activity/test.png']) RETURNING id",Long.class,definition,owner);
         for(var entry:Map.of("restaurant",restaurant,"foods",food,"food_tags",tag,"activity_foods",activity,"activity_dinners",dinner).entrySet()) mirror(ad,bd,entry.getKey(),entry.getValue());
-        // The post depends on its activity definition, so the definition is mirrored first.
-        mirror(ad,bd,"activities",definition);mirror(ad,bd,"activity_posts",post);
+        long post=0;
+        if (genericActivities) {
+            long definition=ad.runtime().queryForObject("INSERT INTO activities(code,name,status) VALUES('fixture','fixture','ONLINE') RETURNING id",Long.class);
+            post=ad.runtime().queryForObject("INSERT INTO activity_posts(activity_id,account_id,picture_url) VALUES(?,?,ARRAY['activity/test.png']) RETURNING id",Long.class,definition,owner);
+            // The post depends on its activity definition, so the definition is mirrored first.
+            mirror(ad,bd,"activities",definition);mirror(ad,bd,"activity_posts",post);
+        }
         return new Pair(a,b,actor,owner,food,activity,dinner,post,tag);
     }
     static void extendGrantedConsentForSlowSyntheticTest(Pair pair) {

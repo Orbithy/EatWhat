@@ -98,7 +98,7 @@ public final class CatalogPayload {
             }
             case FOOD -> {
                 key.put("restaurantGid", Objects.requireNonNull(restaurantGid));
-                key.put("name", Objects.requireNonNull(payload.get("name")));
+                key.put("name", you.v50to.eatwhat.utils.FoodNames.key((String) Objects.requireNonNull(payload.get("name"))));
             }
             case SYSTEM_TAG -> key.put("normalizedName", Objects.requireNonNull(payload.get("normalizedName")));
             case ACTIVITY -> key.put("code", Objects.requireNonNull(payload.get("code")));

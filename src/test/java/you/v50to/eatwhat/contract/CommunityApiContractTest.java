@@ -20,6 +20,8 @@ import you.v50to.eatwhat.service.NotificationService;
 import you.v50to.eatwhat.service.UserService;
 import you.v50to.eatwhat.support.MvcContractSupport;
 
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -97,13 +99,39 @@ class CommunityApiContractTest extends MvcContractSupport {
     void followAndUnfollowBindQueryParameterRatherThanJsonBody() throws Exception {
         when(users.follow(100L)).thenReturn(Result.ok());
         when(users.unfollow(100L)).thenReturn(Result.ok());
-        String token = loginAs(99L);
+        String token = loginAs(99L, "verified");
         http.perform(post("/user/follow").param("userId", "100").header("satoken", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value(0));
         http.perform(post("/user/unfollow").param("userId", "100").header("satoken", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value(0));
         verify(users).follow(100L);
         verify(users).unfollow(100L);
+    }
+
+    @Test
+    void followingRequiresVerificationButRemovingAnExistingFollowOnlyRequiresLogin() throws Exception {
+        http.perform(as(post("/user/follow").param("userId","100")))
+                .andExpect(jsonPath("$.code").value(20004));
+        verify(users, never()).follow(anyLong());
+        when(users.unfollow(100L)).thenReturn(Result.ok());
+        http.perform(as(post("/user/unfollow").param("userId","100")))
+                .andExpect(jsonPath("$.code").value(0));
+    }
+
+    @Test
+    void clearHistoryRequiresLoginAndOnlyAcceptsFoodOrRestaurantScope() throws Exception {
+        when(history.clearBrowseHistory(99L,null)).thenReturn(Result.ok());
+        when(history.clearBrowseHistory(99L,"food")).thenReturn(Result.ok());
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/history/browse"))
+                .andExpect(jsonPath("$.code").value(20001));
+        http.perform(as(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/history/browse")))
+                .andExpect(jsonPath("$.code").value(0));
+        http.perform(as(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/history/browse").param("targetType","food").param("accountId","100")))
+                .andExpect(jsonPath("$.code").value(0));
+        http.perform(as(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/history/browse").param("targetType","user")))
+                .andExpect(jsonPath("$.code").value(10001));
+        verify(history).clearBrowseHistory(99L,null);
+        verify(history).clearBrowseHistory(99L,"food");
     }
 
     @Test

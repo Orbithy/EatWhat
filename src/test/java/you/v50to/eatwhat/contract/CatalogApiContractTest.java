@@ -76,6 +76,23 @@ class CatalogApiContractTest extends MvcContractSupport {
     }
 
     @Test
+    void userUploadListUsesPathAuthorAndReturnsNormalFoodPages() throws Exception {
+        when(foods.queryFoods(any(),eq(false))).thenReturn(Result.ok(PageResult.of(List.of(),1L,20L,0L)));
+        http.perform(get("/foods/by-user/100")).andExpect(jsonPath("$.code").value(20001));
+        http.perform(as(get("/foods/by-user/100").param("uploaderId","200").param("page","2")))
+                .andExpect(jsonPath("$.code").value(0));
+        verify(foods).queryFoods(argThat(q->q.getUploaderId()==100L && q.getPage()==2),eq(false));
+    }
+
+    @Test
+    void duplicateFoodReplyIncludesTheExistingIdForNavigation() throws Exception {
+        when(foods.uploadFood(any())).thenThrow(new you.v50to.eatwhat.exception.DuplicateFoodException(42));
+        http.perform(as(post("/foods/upload").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"restaurantId\":1,\"name\":\"云吞\",\"pictureUrl\":[\"foods/test.png\"]}"),"verified"))
+                .andExpect(jsonPath("$.code").value(40016)).andExpect(jsonPath("$.data.id").value(42));
+    }
+
+    @Test
     void recommendationBindsQueryParametersAndKeepsListEnvelope() throws Exception {
         FoodVO item = new FoodVO();
         item.setId(6001L);

@@ -5,6 +5,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import you.v50to.eatwhat.data.dto.BrowseHistoryItemDTO;
@@ -24,5 +25,11 @@ public class HistoryController {
     @GetMapping("/browse")
     public Result<PageResult<BrowseHistoryItemDTO>> getBrowseHistory(@Valid BrowseHistoryQueryDTO dto) {
         return browseHistoryService.getBrowseHistory(StpUtil.getLoginIdAsLong(), dto);
+    }
+
+    /** 清空自己的足迹；targetType 不传时清空菜和店，否则只清空对应分栏。 */
+    @DeleteMapping("/browse")
+    public Result<Void> clearBrowseHistory(@Valid you.v50to.eatwhat.data.dto.ClearBrowseHistoryDTO dto) {
+        return browseHistoryService.clearBrowseHistory(StpUtil.getLoginIdAsLong(), dto.getTargetType());
     }
 }

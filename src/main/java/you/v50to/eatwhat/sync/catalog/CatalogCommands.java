@@ -1195,7 +1195,11 @@ public final class CatalogCommands {
         if (kind == CatalogKind.HUB || fields == null || fields.isEmpty()) return;
         Map<String, Object> key = new TreeMap<>(fields);
         if (kind == CatalogKind.CUSTOM_TAG && ownerUserId != null) key.put("ownerGid", store.userGid(ownerUserId).toString());
-        if (kind == CatalogKind.FOOD && parentId != null) key.put("restaurantGid", store.globalId(EntityType.RESTAURANT, parentId).toString());
+        if (kind == CatalogKind.FOOD && parentId != null) {
+            key.put("restaurantGid", store.globalId(EntityType.RESTAURANT, parentId).toString());
+            key.remove("restaurantId");
+            key.put("name", you.v50to.eatwhat.utils.FoodNames.key((String) key.get("name")));
+        }
         String serialized = EventCodec.canonicalJson(toJson(key));
         store.lockNaturalKey(kind, EventCodec.sha256(serialized));
     }

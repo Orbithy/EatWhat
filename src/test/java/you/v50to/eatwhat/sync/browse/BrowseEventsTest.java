@@ -35,6 +35,25 @@ class BrowseEventsTest {
             assertEquals("INVALID_BROWSE_EVENT", failure.getMessage()); assertNull(failure.getCause());
         }
     }
+    @Test void deletionFrontierRequiresV2AndBindsTheAuthenticatedActor() {
+        UUID actor=UUID.randomUUID(),id=UUID.randomUUID();
+        var clear=new BrowseEvents.Clear(actor,1,"food",Map.of("campus",1L));
+        var event=new SyncEvent(id,"campus",instance,BrowseEvents.AGGREGATE,id,1,BrowseEvents.CLEAR,2,
+                VersionVector.empty(),VersionVector.empty().increment("campus"),
+                List.of(new SyncEvent.Dependency("users",actor)),actor,"clear:"+id,id,BrowseEvents.payload(clear));
+        policy.validate(event,new NodeIdentity("campus",instance));
+        assertEquals(clear,BrowseEvents.parseClear(event.payloadJson()));
+        assertEquals(Set.of(1,2),policy.supportedSchemaVersions().get(BrowseEvents.AGGREGATE));
+        for(String bad:List.of(event.payloadJson().replace("\"food\"","\"user\""),
+                event.payloadJson().replace("\"campus\":1","\"campus\":1.5"),
+                event.payloadJson().replace("\"actorEpoch\":1","\"actorEpoch\":0"))) {
+            assertThrows(IllegalArgumentException.class,()->BrowseEvents.parseClear(bad));
+        }
+        var old=observation();
+        var fresh=new BrowseEvents.Observation(old.visitId(),old.actor(),old.owner(),old.targetType(),old.target(),1,1,old.viewedAtMicros(),Map.of("campus",1L));
+        assertThrows(IllegalArgumentException.class,()->policy.validate(event(fresh,BrowseEvents.payload(fresh)),new NodeIdentity("campus",instance)));
+    }
+
     @Test void actorAndDependenciesMustMatchThePayload() {
         var op = observation(); var other = observation();
         var bad = event(op, BrowseEvents.payload(other));

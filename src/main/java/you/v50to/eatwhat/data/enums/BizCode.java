@@ -58,6 +58,7 @@ public enum BizCode {
     ACTIVITY_NOT_OPEN(40013, "活动当前不能发布内容"),
     ACTIVITY_CODE_EXISTS(40014, "活动 code 已存在"),
     ACTIVITY_HAS_POSTS(40015, "活动已有内容，不能删除，请改为下线"),
+    FOOD_NAME_EXISTS(40016, "这家已经有这道菜了，去已有的菜品看看吧"),
 
     // 5xxxx 外部依赖错误
     THIRD_PARTY_UNAVAILABLE(50001, "第三方服务不可用"),

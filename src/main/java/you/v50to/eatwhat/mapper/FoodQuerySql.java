@@ -36,6 +36,7 @@ public final class FoodQuerySql {
               JOIN food_favorites ff ON ff.food_id = f.id AND ff.account_id = #{currentUserId}
             </if>
             WHERE f.catalog_visible AND r.catalog_visible
+            <if test="query.uploaderId != null">AND f.account_id = #{query.uploaderId}</if>
             <if test="query.restaurantId != null">AND f.restaurant_id = #{query.restaurantId}</if>
             <if test="query.hubId != null">AND r.hub_id = #{query.hubId}</if>
             <if test="query.keyword != null and query.keyword.trim() != ''">

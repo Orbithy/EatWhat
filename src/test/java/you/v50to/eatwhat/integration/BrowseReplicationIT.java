@@ -31,11 +31,12 @@ class BrowseReplicationIT {
         var db = base.db();
         return new Site(base, new BrowseCommands(db.runtime(), db.transactions(),
                 new OutboxService(db.runtime(), db.transactions(), CODEC, db.site()), base.consent(), db.site(), base.peerSiteId(), 32),
-                new InboxService(db.runtime(), db.transactions(), CODEC, new EventHandlerRegistry(List.of(new BrowseEventHandler(db.runtime(), base.consent())))),
+                new InboxService(db.runtime(), db.transactions(), CODEC, new EventHandlerRegistry(List.of(new BrowseEventHandler(db.runtime(), base.consent()), new BrowseEventHandler(db.runtime(), base.consent(),2), new BrowseClearEventHandler(db.runtime(),base.consent())))),
                 new BrowseEvents(base.consent()));
     }
     static Pair pair() throws Exception {
-        var fixture = RelationReplicationIT.pair(pg);
+        // Browsing fixtures also run against the scoped V74.2 release without V75 activities.
+        var fixture = RelationReplicationIT.pair(pg, false);
         RelationReplicationIT.extendGrantedConsentForSlowSyntheticTest(fixture);
         return new Pair(fixture, site(fixture.a()), site(fixture.b()));
     }
@@ -68,6 +69,76 @@ class BrowseReplicationIT {
         var bean = new MybatisSqlSessionFactoryBean(); bean.setDataSource(site.db().dataSource()); bean.setConfiguration(configuration);
         try (var session = bean.getObject().openSession()) { return session.getMapper(FoodMapper.class).selectRecommendationCandidates(actor, 1L, true, null, 20).stream().map(f -> f.getId()).toList(); }
     }
+    @Test void clearBothTabsConvergesAndDoesNotTouchAnotherAccountsHistory() throws Exception {
+        var p=pair();
+        p.a.commands.record(p.actor(),"food",p.food());
+        p.b.commands.record(p.actor(),"restaurant",restaurant(p)); exchange(p);
+        p.a.commands.record(p.owner(),"food",p.food()); exchange(p);
+        assertTrue(p.b.commands.clear(p.actor(),null)); exchange(p);
+        assertEquals(0,history(p.a,p.actor())); assertEquals(0,history(p.b,p.actor()));
+        assertEquals(1,history(p.a,p.owner())); assertEquals(1,history(p.b,p.owner()));
+        assertEquals(0,site(p.b.base).commands.runOnce());
+    }
+
+    @Test void offlineClearSuppressesUnknownDelayedAndLegacyVisitsWithoutUsingWallClock() throws Exception {
+        var p=pair();
+        p.a.commands.record(p.actor(),"food",p.food()); var delayed=events(p.a).getFirst();
+        // B has never seen this visit; deleting known IDs alone cannot pass this case.
+        p.b.commands.clear(p.actor(),"food"); var clear=events(p.b).getFirst();
+        receive(p.a,clear); receive(p.b,delayed);
+        assertEquals(0,history(p.a,p.actor())); assertEquals(0,history(p.b,p.actor()));
+        p.a.commands.runOnce(); assertEquals(0,history(p.a,p.actor()));
+        receive(p.a,clear); assertEquals(0,history(p.a,p.actor()));
+    }
+
+    @Test void newVisitCarriesClearFrontierAndSurvivesArrivalBeforeClearEvent() throws Exception {
+        var p=pair();
+        p.a.commands.record(p.actor(),"food",p.food()); var old=events(p.a).getFirst();
+        p.a.commands.clear(p.actor(),"food"); var clear=events(p.a).getLast();
+        assertTrue(p.a.commands.record(p.actor(),"food",p.food())); var fresh=events(p.a).getLast();
+        assertEquals(2,fresh.schemaVersion());
+        receive(p.b,fresh); receive(p.b,old); receive(p.b,clear);
+        assertEquals(1,history(p.a,p.actor())); assertEquals(visits(p.a,p.actor()),visits(p.b,p.actor()));
+        assertEquals(1L,p.b.db().admin().queryForObject(
+                "SELECT count(*) FROM eatwhat_sync.personal_event_subjects(?::jsonb)",Long.class,CODEC.encode(clear).json()));
+    }
+
+    @Test void concurrentClearsWinOverUnobservedVisitsAndLaterBrowseStartsAgain() throws Exception {
+        var p=pair();
+        p.a.commands.clear(p.actor(),"food"); p.b.commands.clear(p.actor(),"food");
+        p.a.commands.record(p.actor(),"food",p.food()); p.b.commands.record(p.actor(),"food",p.food());
+        exchange(p); assertEquals(0,history(p.a,p.actor())); assertEquals(0,history(p.b,p.actor()));
+        assertTrue(p.a.commands.record(p.actor(),"food",p.food())); exchange(p);
+        assertEquals(1,history(p.a,p.actor())); assertEquals(visits(p.a,p.actor()),visits(p.b,p.actor()));
+    }
+
+    @Test void scopedClearAndRollbackKeepOtherTabAndAtomicOutbox() throws Exception {
+        var p=pair(); p.a.commands.record(p.actor(),"food",p.food());
+        p.a.commands.record(p.actor(),"restaurant",restaurant(p)); exchange(p);
+        int before=events(p.a).size();
+        assertThrows(IllegalStateException.class,()->p.a.db().transactions().required(()->{
+            p.a.commands.clear(p.actor(),null); throw new IllegalStateException("rollback");
+        }));
+        assertEquals(2,history(p.a,p.actor())); assertEquals(before,events(p.a).size());
+        p.a.commands.clear(p.actor(),"food"); exchange(p);
+        assertEquals(1,history(p.a,p.actor())); assertEquals(visits(p.a,p.actor()),visits(p.b,p.actor()));
+        assertEquals("restaurant",visits(p.b,p.actor()).getFirst().get("target_type"));
+    }
+
+    @Test void campusClearBeforeConsentDoesNotPublishAndGrantLaterPublishesFrontier() throws Exception {
+        var p=pair();
+        long local=p.a.db().runtime().queryForObject("INSERT INTO users(nick_name,password_hash) VALUES('clear-local','synthetic') RETURNING id",Long.class);
+        p.a.consent().onRegistered(local,false,RelationReplicationIT.POLICY);
+        p.a.commands.record(local,"food",p.food()); p.a.commands.clear(local,null);
+        assertTrue(events(p.a).isEmpty()); assertEquals(0,history(p.a,local));
+        p.a.consent().grant(local,RelationReplicationIT.POLICY);
+        var job=p.a.consent().claim(32,LEASE).stream().filter(j->j.userId()==local && j.kind().equals("UPSERT")).findFirst().orElseThrow();
+        assertEquals("APPLIED",p.b.consent().apply(p.a.consent().export(job))); p.a.consent().complete(job);
+        assertEquals(2,site(p.a.base).commands.runOnce()); exchange(p);
+        assertTrue(events(p.a).stream().allMatch(e->e.eventType().equals(BrowseEvents.CLEAR)));
+        assertEquals(0,history(p.b,local));
+    }
+
     @Test void foodAndRestaurantVisitsConvergeInBothDirectionsWithOriginalTimeAndNoEcho() throws Exception {
         var p = pair();
         assertTrue(p.a.commands.record(p.actor(), "food", p.food()));
@@ -92,6 +163,9 @@ class BrowseReplicationIT {
         assertEquals(List.of(candidate, popular), ranking(p.a, p.actor())); assertEquals(ranking(p.a, p.actor()), ranking(p.b, p.actor()));
         p.b.commands.record(p.actor(), "restaurant", restaurant); exchange(p);
         assertEquals(ranking(p.a, p.actor()), ranking(p.b, p.actor()));
+        p.a.commands.clear(p.actor(),null); exchange(p);
+        assertEquals(List.of(popular,candidate),ranking(p.a,p.actor()));
+        assertEquals(ranking(p.a,p.actor()),ranking(p.b,p.actor()));
     }
     @Test void concurrentOfflineVisitsAndOutOfOrderReplayPreserveFactsWithoutIncreasingVisitWeight() throws Exception {
         var p = pair(); p.a.commands.record(p.actor(), "food", p.food()); p.b.commands.record(p.actor(), "food", p.food());
@@ -204,6 +278,21 @@ class BrowseReplicationIT {
         var events = events(p.a);
         assertEquals(BrowseEvents.parse(events.getFirst().payloadJson()).visitId(), BrowseEvents.parse(events.getLast().payloadJson()).visitId());
         receive(p.b, events.getFirst()); assertEquals(1, history(p.b, p.actor()));
+    }
+
+    @Test void clearFrontierSurvivesWithdrawalAndIsRepublishedUnderTheNewConsentEpoch() throws Exception {
+        var p=pair();p.a.commands.record(p.actor(),"food",p.food());var old=events(p.a).getFirst();exchange(p);
+        p.a.commands.clear(p.actor(),null);exchange(p);
+        p.a.consent().withdraw(p.actor());
+        var purge=p.a.consent().claim(32,LEASE).stream().filter(j->j.userId()==p.actor() && j.kind().equals("PURGE")).findFirst().orElseThrow();
+        assertEquals("APPLIED",p.b.consent().apply(p.a.consent().export(purge)));p.a.consent().complete(purge);
+        p.a.consent().grant(p.actor(),RelationReplicationIT.POLICY);
+        var grant=p.a.consent().claim(32,LEASE).stream().filter(j->j.userId()==p.actor() && j.kind().equals("UPSERT")).findFirst().orElseThrow();
+        assertEquals("APPLIED",p.b.consent().apply(p.a.consent().export(grant)));p.a.consent().complete(grant);
+        assertEquals(2,site(p.a.base).commands.runOnce());exchange(p);
+        receive(p.b,old);assertEquals(0,history(p.b,p.actor()));
+        assertTrue(p.b.commands.record(p.actor(),"food",p.food()));exchange(p);
+        assertEquals(1,history(p.a,p.actor()));assertEquals(visits(p.a,p.actor()),visits(p.b,p.actor()));
     }
 
     @Test void aDeletedCatalogTargetDiscardsItsLateObservationWithoutRecreatingAnything() throws Exception {

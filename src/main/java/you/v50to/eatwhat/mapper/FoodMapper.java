@@ -13,6 +13,15 @@ import java.util.Map;
 @Mapper
 public interface FoodMapper extends BaseMapper<Food> {
 
+    @Select("SELECT 1 FROM pg_advisory_xact_lock(hashtextextended('food-name:' || #{restaurantId}::text || ':' || eatwhat_sync.food_name_key(#{name}),0))")
+    int lockName(@Param("restaurantId") Long restaurantId, @Param("name") String name);
+
+    @Select("SELECT id FROM foods WHERE restaurant_id=#{restaurantId} AND catalog_visible "
+            + "AND eatwhat_sync.food_name_key(name)=eatwhat_sync.food_name_key(#{name}) "
+            + "AND (#{exceptId}::bigint IS NULL OR id <> #{exceptId}) ORDER BY id LIMIT 1")
+    Long findDuplicateName(@Param("restaurantId") Long restaurantId, @Param("name") String name,
+                           @Param("exceptId") Long exceptId);
+
     @SelectProvider(type = FoodQuerySql.class, method = "select")
     @Results(value = {
         @Result(property = "uploaderName", column = "uploaderName"),

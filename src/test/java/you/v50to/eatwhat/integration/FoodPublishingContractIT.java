@@ -92,6 +92,44 @@ class FoodPublishingContractIT extends you.v50to.eatwhat.support.MvcContractSupp
         dto.setMyCustomTagNames(List.of(" 想吃 ", "想吃")); return dto;
     }
 
+    @Test void duplicateNamesIgnoreSpacesAndRollbackBeforeFilesAndTags() {
+        long id=service.uploadFood(dto("  鲜虾 云吞  ")).getData().id();
+        assertEquals("鲜虾 云吞",mapper.selectById(id).getName());
+        var failure=assertThrows(you.v50to.eatwhat.exception.DuplicateFoodException.class,
+                ()->service.uploadFood(dto("鲜虾　云吞")));
+        assertEquals(id,failure.foodId());
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM foods WHERE restaurant_id=?",Integer.class,restaurant));
+        verify(files,times(1)).finalizeAndReferenceMany(any(),any(),any(),any(),any(),any());
+        var edit=new EditFoodDTO();edit.setName("鲜虾云吞");
+        assertEquals(0,service.editMyFood(id,edit).getCode(),"Current dish must not collide with itself");
+        long second=service.uploadFood(dto("饺子")).getData().id();
+        assertThrows(you.v50to.eatwhat.exception.DuplicateFoodException.class,()->service.editMyFood(second,edit));
+        assertEquals("饺子",mapper.selectById(second).getName());
+        long another=jdbc.queryForObject("INSERT INTO restaurant(account_id,name,location,gcj_lng,gcj_lat) VALUES(?,'another',ST_SetSRID(ST_MakePoint(117,36),4326)::geography,117,36) RETURNING id",Long.class,me);
+        var sameName=dto("鲜虾云吞");sameName.setRestaurantId(another);
+        long moved=service.uploadFood(sameName).getData().id();
+        var move=new EditFoodDTO();move.setRestaurantId(restaurant);
+        assertThrows(you.v50to.eatwhat.exception.DuplicateFoodException.class,()->service.editMyFood(moved,move));
+        assertEquals(another,mapper.selectById(moved).getRestaurantId());
+    }
+
+    @Test void concurrentDuplicatePublishingAcceptsExactlyOneAndReturnsItsIdToTheLoser() throws Exception {
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(2);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try {
+            var tasks=new java.util.ArrayList<java.util.concurrent.Callable<Long>>();
+            for(String name:List.of("并发 云吞","并发云吞")) tasks.add(()->{
+                start.await(); var request=dto(name);request.setSystemTagIds(null);request.setMyCustomTagNames(null);
+                try{return service.uploadFood(request).getData().id();}
+                catch(you.v50to.eatwhat.exception.DuplicateFoodException duplicate){return -duplicate.foodId();}
+            });
+            var first=executor.submit(tasks.get(0));var second=executor.submit(tasks.get(1));start.countDown();
+            long a=first.get(20,java.util.concurrent.TimeUnit.SECONDS),b=second.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(Math.abs(a),Math.abs(b));assertTrue((a>0)!=(b>0));
+            assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM foods WHERE restaurant_id=?",Integer.class,restaurant));
+        }finally{executor.shutdownNow();}
+    }
+
     @Test void returnsPersistedIdAndSavesInitialTagsOnce() {
         var result = service.uploadFood(dto("午餐"));
         assertEquals(0, result.getCode()); long id = result.getData().id();

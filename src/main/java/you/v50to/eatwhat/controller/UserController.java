@@ -121,7 +121,7 @@ public class UserController {
     /**
      * 关注他人
      */
-    @SaCheckLogin
+    @SaCheckRole("verified")
     @PostMapping("/follow")
     public Result<Void> follow(@RequestParam Long userId) {
         return userService.follow(userId);

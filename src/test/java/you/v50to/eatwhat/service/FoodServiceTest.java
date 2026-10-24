@@ -123,6 +123,31 @@ class FoodServiceTest {
     }
 
     @Test
+    void guestCannotBypassUserUploadListAuthenticationThroughThePublicFilter() {
+        var query=new you.v50to.eatwhat.data.dto.FoodQueryDTO();query.setUploaderId(100L);
+        org.mockito.Mockito.doThrow(new IllegalStateException("login-required")).when(foodService).currentUserId();
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,()->foodService.queryFoods(query,false));
+        org.mockito.Mockito.verifyNoInteractions(foodMapper);
+    }
+
+    @Test
+    void anotherAuthorsUploadsUseTheVisitorsPrivateTagsLikesAndFavorites() {
+        var query=new you.v50to.eatwhat.data.dto.FoodQueryDTO();query.setUploaderId(100L);
+        Food food=buildFood(10L,"作者上传的菜");food.setAccountId(100L);
+        when(foodMapper.selectFoods(eq(query),eq(99L),eq(false),any(),anyLong(),anyInt()))
+                .thenReturn(List.of(food));
+        when(foodMapper.countFoods(eq(query),eq(99L),eq(false),any())).thenReturn(1L);
+        when(likeMapper.selectLikedTargetIds(99L,"food",List.of(10L))).thenReturn(List.of(10L));
+        when(foodFavoriteMapper.selectFavoriteFoodIds(99L,List.of(10L))).thenReturn(List.of());
+        var result=foodService.queryFoods(query,false);var item=result.getData().getItems().getFirst();
+        assertTrue(item.getIsLiked());assertFalse(item.getIsFavorite());
+        verify(foodTagService).fillFoodTagViews(any(),eq(99L));
+        verify(foodTagService,never()).fillFoodTagViews(any(),eq(100L));
+        verify(likeMapper,never()).selectLikedTargetIds(eq(100L),any(),any());
+        verify(foodFavoriteMapper,never()).selectFavoriteFoodIds(eq(100L),any());
+    }
+
+    @Test
     void favoriteFoodShouldFailWhenFoodNotExists() {
         when(foodMapper.selectById(10L)).thenReturn(null);
 

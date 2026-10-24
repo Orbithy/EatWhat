@@ -18,8 +18,7 @@ import java.sql.Types;
 @MappedTypes(Point.class)
 public class PointTypeHandler extends BaseTypeHandler<Point> {
 
-    private final WKTReader wktReader = new WKTReader();
-    private final WKBReader wkbReader = new WKBReader();
+    // MyBatis shares handlers across request threads; JTS readers have mutable parse state.
 
     @Override
     public void setNonNullParameter(PreparedStatement ps, int i, Point parameter, JdbcType jdbcType) throws SQLException {
@@ -68,9 +67,9 @@ public class PointTypeHandler extends BaseTypeHandler<Point> {
         try {
             Geometry geometry;
             if (isHexEncoded(value)) {
-                geometry = wkbReader.read(hexToBytes(value));
+                geometry = new WKBReader().read(hexToBytes(value));
             } else {
-                geometry = wktReader.read(value);
+                geometry = new WKTReader().read(value);
             }
             if (geometry instanceof Point point) {
                 return point;

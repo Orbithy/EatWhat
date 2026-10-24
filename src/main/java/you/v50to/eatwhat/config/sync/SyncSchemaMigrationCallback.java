@@ -63,6 +63,9 @@ public final class SyncSchemaMigrationCallback implements Callback {
                 execute(connection, "REVOKE ALL ON ALL FUNCTIONS IN SCHEMA eatwhat_sync FROM " + role);
                 execute(connection, "GRANT USAGE ON SCHEMA eatwhat_sync TO " + role);
                 execute(connection, "GRANT SELECT,INSERT ON ALL TABLES IN SCHEMA eatwhat_sync TO " + role);
+                if (syncTableExists(connection, "browse_clear")) {
+                    execute(connection, "GRANT EXECUTE ON FUNCTION eatwhat_sync.food_name_key(text) TO " + role);
+                }
                 if (syncTableExists(connection, "catalog_multiwriter_config")) {
                     execute(connection, "REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON eatwhat_sync.catalog_multiwriter_config FROM " + role);
                     execute(connection, "GRANT EXECUTE ON FUNCTION eatwhat_sync.catalog_command_actor(text,bigint) TO " + role);
@@ -244,6 +247,7 @@ public final class SyncSchemaMigrationCallback implements Callback {
         values.put("relation_baseline_claim", "");
         values.put("relation_causal_state", "actor_epoch,owner_epoch,seen,add_witnesses,remove_frontier,legacy_loaded,blocked_reason,updated_at");
         values.put("relation_causal_fact", "");
+        values.put("browse_clear", "vector,dirty,published_epoch");
         values.put("preference_state", "epoch,logical_clock,winner_id,winner_site,value_hash,observed_at,is_empty,local_dirty,published_epoch");
         values.put("profile_domain", "vector,active_epoch,published_epoch,revision,managed,local_dirty");
         values.put("profile_operation", "");
@@ -300,7 +304,7 @@ public final class SyncSchemaMigrationCallback implements Callback {
 
     /** Old migration targets must not require tables introduced by later additive migrations. */
     private static boolean optionalPreferenceTableMissing(Connection connection, String table) throws SQLException {
-        if (!java.util.Set.of("consent_policy", "consent_policy_history", "preference_state", "catalog_multiwriter_config", "catalog_projection_state",
+        if (!java.util.Set.of("browse_clear", "consent_policy", "consent_policy_history", "preference_state", "catalog_multiwriter_config", "catalog_projection_state",
                 "catalog_actor_evidence", "activity_intent", "catalog_authorization_review", "catalog_decision_operation",
                 "catalog_decision_state", "catalog_import_claim", "catalog_visibility_context", "catalog_decision_projection_context", "profile_authorization",
                 "profile_authorization_review", "profile_authorization_review_decision", "historical_domain_source_claim",

@@ -388,6 +388,17 @@ class FoodRecommendationIT {
         return profileService.getProfile(account).getData();
     }
 
+    @Test void uploaderFilterSharesCountAndPaging() {
+        long first=food("staple",1,true),second=food("drink",2,true),another=food("staple",3,true);
+        jdbc.update("UPDATE foods SET account_id=? WHERE id IN (?,?)",other,first,second);
+        var q=new you.v50to.eatwhat.data.dto.FoodQueryDTO();q.setUploaderId(other);
+        assertEquals(2L,foods.countFoods(q,me,false,List.of()));
+        var page=foods.selectFoods(q,me,false,List.of(),0,1);
+        assertEquals(1,page.size());assertEquals(other,page.getFirst().getAccountId());
+        assertFalse(foods.selectFoods(q,me,false,List.of(),0,20).stream().anyMatch(f->f.getId()==another));
+        q.setUploaderId(Long.MAX_VALUE);assertEquals(0L,foods.countFoods(q,me,false,List.of()));
+    }
+
     @Test
     void discoveryFiltersAcrossRestaurantsBeforePagingAndSharesCount() {
         long first = food("staple", 1, true), second = food("staple", 2, true);

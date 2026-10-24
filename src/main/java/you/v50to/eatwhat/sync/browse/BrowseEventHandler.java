@@ -14,14 +14,20 @@ public final class BrowseEventHandler implements EventHandler {
     private final ConsentStore consent;
     private final EntityIdentityService identities;
     private final BrowseEvents policy;
+    private final int version;
+    private final BrowseClearStore clears;
 
     public BrowseEventHandler(JdbcTemplate jdbc, ConsentStore consent) {
+        this(jdbc, consent, 1);
+    }
+    public BrowseEventHandler(JdbcTemplate jdbc, ConsentStore consent, int version) {
+        this.version = version; this.clears = new BrowseClearStore(jdbc);
         this.jdbc = jdbc; this.consent = consent; this.identities = new EntityIdentityService(jdbc);
         this.policy = new BrowseEvents(consent);
     }
     @Override public String aggregateType() { return BrowseEvents.AGGREGATE; }
     @Override public String eventType() { return BrowseEvents.EVENT; }
-    @Override public int schemaVersion() { return 1; }
+    @Override public int schemaVersion() { return version; }
 
     private BrowseEvents.Observation observation(SyncEvent event) {
         policy.validate(event, new NodeIdentity(event.originSite(), event.originInstanceId()));
@@ -42,6 +48,7 @@ public final class BrowseEventHandler implements EventHandler {
         var actor = consent.getBySubject(op.actor()); var owner = consent.getBySubject(op.owner());
         if (actor == null || owner == null || actor.epoch() != op.actorEpoch() || owner.epoch() != op.ownerEpoch()
                 || !consent.replicationAllowed(actor.userId()) || !consent.replicationAllowed(owner.userId())) return false;
+        clears.lock(actor.userId());
         Long target = identities.findNumericId(EntityType.fromTableName(BrowseCommands.table(op.targetType())), op.target()).orElse(null);
         if (target == null) return false;
         var owners = jdbc.query("SELECT account_id FROM public." + BrowseCommands.table(op.targetType()) + " WHERE id=? FOR SHARE",
@@ -74,16 +81,19 @@ public final class BrowseEventHandler implements EventHandler {
         var actor = consent.getBySubject(op.actor()); var owner = consent.getBySubject(op.owner());
         if (actor == null || owner == null || actor.epoch() != op.actorEpoch() || owner.epoch() != op.ownerEpoch()
                 || !consent.replicationAllowed(actor.userId()) || !consent.replicationAllowed(owner.userId())) return;
+        var frontier = clears.merge(actor.userId(), op.targetType(), op.clearContext());
+        if (!BrowseClearStore.covers(op.clearContext(), frontier)) return;
         long target = identities.findNumericId(EntityType.fromTableName(BrowseCommands.table(op.targetType())), op.target()).orElseThrow();
         jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", row -> {}, "browse-visit:" + op.visitId());
         var existing = jdbc.queryForList("SELECT history_id FROM eatwhat_sync.browse_visit WHERE visit_id=?", Long.class, op.visitId());
         if (existing.isEmpty()) {
             long historyId = jdbc.queryForObject("""
                 INSERT INTO public.browse_history(account_id,target_type,target_id,created_at,sync_visit_id,sync_origin_site,
-                  sync_actor_epoch,sync_owner_epoch)
-                VALUES(?,?,?,?,?,?,?,?) RETURNING id
+                  sync_actor_epoch,sync_owner_epoch,sync_clear_context)
+                VALUES(?,?,?,?,?,?,?,?,?::jsonb) RETURNING id
                 """, Long.class, actor.userId(), op.targetType(), target, BrowseCommands.timestamp(op.viewedAtMicros()),
-                op.visitId(), event.originSite(), op.actorEpoch(), op.ownerEpoch());
+                op.visitId(), event.originSite(), op.actorEpoch(), op.ownerEpoch(),
+                EventCodec.vectorJson(new VersionVector(op.clearContext())));
             jdbc.update("INSERT INTO eatwhat_sync.browse_visit(visit_id,history_id,origin_site) VALUES(?,?,?)",
                     op.visitId(), historyId, event.originSite());
         }

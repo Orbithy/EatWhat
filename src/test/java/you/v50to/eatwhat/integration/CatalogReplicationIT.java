@@ -70,6 +70,31 @@ class CatalogReplicationIT extends MvcContractSupport {
     private record Pair(CatalogSite campus, CatalogSite external) { }
 
     @Test
+    void offlineNormalizedFoodNameCollisionConvergesAndCanBeResolvedWithoutMergingIds() {
+        Pair pair=pair();long owner=registerSharedUser(pair.campus,pair.external,"p1-food-owner");
+        for(var site:List.of(pair.campus,pair.external))promoteCampusAdmin(site,owner);
+        var restaurant=createRestaurant(pair.campus,owner,"p1-food-poi","P1 restaurant");exchange(pair);
+        MultiSite campus=multiSite(pair.campus),external=multiSite(pair.external);
+        var first=createFood(pair.campus,owner,restaurant.value(),"鲜虾 云吞");
+        var second=createFood(pair.external,owner,restaurant.value(),"鲜虾　云吞");
+        assertEquals(CatalogCommands.Status.APPLIED,first.status());assertEquals(CatalogCommands.Status.APPLIED,second.status());
+        exchangeMulti(campus,external,owner);exchangeMulti(external,campus,owner);
+        UUID conflict=pair.campus.db.runtime().queryForObject("SELECT conflict_id FROM eatwhat_sync.catalog_conflict WHERE kind='FOOD' AND status='OPEN'",UUID.class);
+        for(var site:List.of(pair.campus,pair.external)) {
+            assertEquals(1,site.db.runtime().queryForObject("SELECT count(*) FROM eatwhat_sync.catalog_conflict WHERE kind='FOOD' AND status='OPEN'",Integer.class));
+            assertEquals(0,site.db.runtime().queryForObject("SELECT count(*) FROM foods WHERE restaurant_id=? AND catalog_visible",Integer.class,restaurant.value()));
+            assertEquals(2,site.db.runtime().queryForObject("SELECT count(*) FROM eatwhat_sync.catalog_candidate WHERE kind='FOOD' AND status='PENDING'",Integer.class));
+        }
+        var candidates=campus.decisions.view(conflict).candidateOperations();assertEquals(2,candidates.size());
+        UUID winner=pair.campus.db.runtime().queryForObject("SELECT candidate_id FROM eatwhat_sync.catalog_candidate WHERE object_gid=?",UUID.class,first.candidateGid());
+        assertEquals(CatalogCommands.Status.APPLIED,campus.decisions.resolve(conflict,candidates,List.of(),CatalogDecision.KEEP,winner,"Keep one dish",owner));
+        exchangeMulti(campus,external,owner);
+        for(var site:List.of(pair.campus,pair.external)) {
+            assertEquals(List.of(first.value()),site.db.runtime().queryForList("SELECT id FROM foods WHERE restaurant_id=? AND catalog_visible",Long.class,restaurant.value()));
+        }
+    }
+
+    @Test
     void multiwriterFirstHubCreationThroughHttpCapturesAuthenticatedActorAtBothSites() throws Exception {
         Pair pair=pair();long admin=registerSharedUser(pair.campus,pair.external,"mw-first-http-admin");
         for(var site:List.of(pair.campus,pair.external))promoteCampusAdmin(site,admin);

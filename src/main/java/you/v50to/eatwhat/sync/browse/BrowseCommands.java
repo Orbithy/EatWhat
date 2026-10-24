@@ -23,12 +23,14 @@ public final class BrowseCommands {
     private final int batchSize;
     private final EntityIdentityService identities;
     private final BrowseEvents policy;
+    private final BrowseClearStore clears;
     private final AtomicBoolean active = new AtomicBoolean();
 
     public BrowseCommands(JdbcTemplate jdbc, SyncTransactions transactions, OutboxService outbox,
                           ConsentStore consent, SiteProperties site, String peer, int batchSize) {
         this.jdbc = jdbc; this.transactions = transactions; this.outbox = outbox; this.consent = consent;
         this.site = site; this.peer = peer; this.batchSize = batchSize;
+        this.clears = new BrowseClearStore(jdbc);
         this.identities = new EntityIdentityService(jdbc); this.policy = new BrowseEvents(consent);
     }
 
@@ -61,12 +63,13 @@ public final class BrowseCommands {
             // Campus local use does not require a grant; withdrawn external sessions may not write.
             if (site.getMode() == SiteProperties.Mode.EXTERNAL && !consent.replicationAllowed(actor)) return false;
             if (jdbc.queryForObject("SELECT count(*) FROM public.users WHERE id=?", Long.class, actor) != 1) return false;
+            VersionVector context = clears.context(actor, type);
             var ids = jdbc.query("""
-                    INSERT INTO public.browse_history(account_id,target_type,target_id,created_at,sync_visit_id,sync_origin_site)
-                    SELECT ?,?,?,clock_timestamp(),?,?
+                    INSERT INTO public.browse_history(account_id,target_type,target_id,created_at,sync_visit_id,sync_origin_site,sync_clear_context)
+                    SELECT ?,?,?,clock_timestamp(),?,?,?::jsonb
                     WHERE NOT EXISTS(SELECT 1 FROM public.browse_history WHERE account_id=? AND target_type=?
                       AND target_id=? AND created_at>=clock_timestamp()-interval '5 minutes') RETURNING id
-                    """, (row, index) -> row.getLong(1), actor, type, target, UUID.randomUUID(), site.getId(), actor, type, target);
+                    """, (row, index) -> row.getLong(1), actor, type, target, UUID.randomUUID(), site.getId(), EventCodec.vectorJson(context), actor, type, target);
             if (ids.isEmpty()) return false;
             publishLocked(ids.getFirst());
             return true;
@@ -74,7 +77,7 @@ public final class BrowseCommands {
     }
 
     private record Visit(long id, long actor, String type, long target, Instant at, UUID visit, String origin,
-                         long actorEpoch, long ownerEpoch) { }
+                         long actorEpoch, long ownerEpoch, Map<String, Long> clearContext) { }
 
     private Visit visit(long id, boolean lock) {
         return jdbc.query("""
@@ -85,7 +88,8 @@ public final class BrowseCommands {
                 """ + (lock ? " FOR UPDATE OF b" : ""), (row, index) -> new Visit(row.getLong("id"),
                 row.getLong("account_id"), row.getString("target_type"), row.getLong("target_id"),
                 row.getTimestamp("created_at").toInstant(), row.getObject("visit", UUID.class), row.getString("origin"),
-                row.getLong("sync_actor_epoch"), row.getLong("sync_owner_epoch")), id).stream().findFirst().orElse(null);
+                row.getLong("sync_actor_epoch"), row.getLong("sync_owner_epoch"),
+                EventCodec.vectorFromJson(row.getString("sync_clear_context")).counters()), id).stream().findFirst().orElse(null);
     }
 
     public boolean publish(long id) {
@@ -116,11 +120,11 @@ public final class BrowseCommands {
         }
         var observation = new BrowseEvents.Observation(visit.visit(), global(EntityType.USERS, visit.actor()),
                 global(EntityType.USERS, owner), visit.type(), global(EntityType.fromTableName(table(visit.type())), visit.target()),
-                actorState.epoch(), ownerState.epoch(), micros(visit.at()));
+                actorState.epoch(), ownerState.epoch(), micros(visit.at()), visit.clearContext());
         UUID eventId = UUID.randomUUID();
         long number = jdbc.queryForObject("SELECT eatwhat_sync.next_relation_number()", Long.class);
         var event = new SyncEvent(eventId, site.getId(), site.getInstanceId(), BrowseEvents.AGGREGATE, eventId,
-                number, BrowseEvents.EVENT, 1, VersionVector.empty(), VersionVector.empty().increment(site.getId()),
+                number, BrowseEvents.EVENT, visit.clearContext().isEmpty()?1:2, VersionVector.empty(), VersionVector.empty().increment(site.getId()),
                 observation.dependencies(), observation.actor(), "browse:" + eventId, eventId, BrowseEvents.payload(observation));
         policy.validate(event, new NodeIdentity(site.getId(), site.getInstanceId()));
         outbox.append(event, you.v50to.eatwhat.cluster.ClusterRouting.legacyRecipients(site, peer));
@@ -129,6 +133,62 @@ public final class BrowseCommands {
                   sync_attempted_at=clock_timestamp() WHERE id=?
                 """, visit.visit(), visit.origin(), actorState.epoch(), ownerState.epoch(), id);
         return true;
+    }
+
+    /** Clear one history tab, or both. No target owner grant is required to delete one's own history. */
+    public boolean clear(long actor, String type) {
+        if (type != null) table(type);
+        return transactions.required(() -> {
+            jdbc.query("SELECT user_id FROM eatwhat_consent.subject WHERE user_id=? FOR SHARE", (r,n)->r.getLong(1),actor);
+            jdbc.query("SELECT id FROM public.users WHERE id=? FOR KEY SHARE",(r,n)->r.getLong(1),actor);
+            clears.lock(actor);
+            if (site.getMode()==SiteProperties.Mode.EXTERNAL && !consent.replicationAllowed(actor)) return false;
+            for (String targetType : type==null?List.of("food","restaurant"):List.of(type)) {
+                var next=clears.context(actor,targetType).increment(site.getId());
+                clears.merge(actor,targetType,next.counters());
+                publishClearLocked(actor,targetType);
+            }
+            return true;
+        });
+    }
+
+    private boolean publishClearLocked(long actor, String type) {
+        var context=clears.context(actor,type);
+        if(context.counters().isEmpty() || !consent.replicationAllowed(actor))return false;
+        var state=consent.get(actor);
+        var pending=jdbc.queryForObject("SELECT dirty OR published_epoch<>? FROM eatwhat_sync.browse_clear WHERE user_id=? AND target_type=?",
+                Boolean.class,state.epoch(),actor,type);
+        if(!Boolean.TRUE.equals(pending))return false;
+        UUID id=UUID.randomUUID(), actorGid=global(EntityType.USERS,actor);
+        var clear=new BrowseEvents.Clear(actorGid,state.epoch(),type,context.counters());
+        long number=jdbc.queryForObject("SELECT eatwhat_sync.next_relation_number()",Long.class);
+        var event=new SyncEvent(id,site.getId(),site.getInstanceId(),BrowseEvents.AGGREGATE,id,number,
+                BrowseEvents.CLEAR,2,VersionVector.empty(),VersionVector.empty().increment(site.getId()),
+                List.of(new SyncEvent.Dependency("users",actorGid)),actorGid,"browse-clear:"+id,id,BrowseEvents.payload(clear));
+        policy.validate(event,new NodeIdentity(site.getId(),site.getInstanceId()));
+        outbox.append(event,you.v50to.eatwhat.cluster.ClusterRouting.legacyRecipients(site,peer));
+        jdbc.update("UPDATE eatwhat_sync.browse_clear SET dirty=false,published_epoch=? WHERE user_id=? AND target_type=?",state.epoch(),actor,type);
+        return true;
+    }
+
+    private int publishPendingClears() {
+        var pending=jdbc.query("SELECT c.user_id,c.target_type FROM eatwhat_sync.browse_clear c JOIN eatwhat_consent.subject s ON s.user_id=c.user_id JOIN public.users u ON u.id=c.user_id "
+                + "WHERE c.vector<>'{}'::jsonb AND (c.dirty OR c.published_epoch<>s.epoch) AND s.status='GRANTED' "
+                + "AND s.identity_ready AND s.withdrawal_request_id IS NULL AND NOT u.banned AND s.policy_version=? "
+                + "AND (NOT ? OR s.valid_until>clock_timestamp()) ORDER BY c.user_id,c.target_type LIMIT ?",
+                (r,n)->Map.entry(r.getLong(1),r.getString(2)),consent.policyVersion(),
+                site.getMode()==SiteProperties.Mode.EXTERNAL && !consent.multiwriterEnabled(),batchSize);
+        int published=0;
+        for(var item:pending) {
+            if(Thread.currentThread().isInterrupted())break;
+            boolean applied=transactions.required(()->{
+                jdbc.query("SELECT user_id FROM eatwhat_consent.subject WHERE user_id=? FOR SHARE",(r,n)->r.getLong(1),item.getKey());
+                clears.lock(item.getKey());
+                return publishClearLocked(item.getKey(),item.getValue());
+            });
+            if(applied)published++;
+        }
+        return published;
     }
 
     private UUID global(EntityType type, long id) {
@@ -142,6 +202,7 @@ public final class BrowseCommands {
     public int runOnce() {
         if (Thread.currentThread().isInterrupted() || !active.compareAndSet(false, true)) return 0;
         try {
+            int clearCount = publishPendingClears();
             var candidates = jdbc.query("""
                     SELECT b.id FROM public.browse_history b
                     JOIN eatwhat_identity.entity_identity i ON i.entity_type='browse_history' AND i.numeric_id=b.id
@@ -163,7 +224,7 @@ public final class BrowseCommands {
                     ORDER BY b.sync_attempted_at NULLS FIRST,b.id LIMIT ?
                     """, (row, index) -> row.getLong(1), site.getId(), consent.policyVersion(), consent.policyVersion(),
                     site.getMode() == SiteProperties.Mode.EXTERNAL && !consent.multiwriterEnabled(), batchSize);
-            int published = 0;
+            int published = clearCount;
             for (long id : candidates) {
                 if (Thread.currentThread().isInterrupted()) break;
                 try { if (publish(id)) published++; }
